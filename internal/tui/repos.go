@@ -50,6 +50,7 @@ func (m Model) descend() (Model, tea.Cmd) {
 	m.reposErr = nil
 	m.repoFilter = ""
 	m.repoCursor = 0
+	m.selected = nil
 
 	return m, listReposCmd(m.forge, org)
 }

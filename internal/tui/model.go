@@ -15,14 +15,19 @@ import (
 )
 
 // Mode is the Model's explicit state, driving both Update dispatch and View
-// rendering. Later slices of this PRD add LeavePrompt, CloneDialog, CloneRun,
-// HostSwitch, Fatal, and Help.
+// rendering. Later slices of this PRD add CloneRun, HostSwitch, Fatal, and Help.
 type Mode int
 
 const (
 	// ModeBrowse is the default mode: the Org and Repo panes, each with an
 	// always-focused live filter.
 	ModeBrowse Mode = iota
+	// ModeLeavePrompt guards a non-empty Selection (ADR-0005): entered instead of
+	// completing a navigation away from the Repo pane. clone now / discard / stay.
+	ModeLeavePrompt
+	// ModeCloneDialog is built out by a later slice of this PRD (#31); the mode
+	// exists now so LeavePrompt's "clone now" choice has somewhere real to go.
+	ModeCloneDialog
 )
 
 // Focus is which of the two Browse-mode panes is currently receiving key input.
@@ -112,6 +117,21 @@ type Model struct {
 	archivedFilter TriState // default TriHide
 	forkFilter     TriState // default TriHide
 	visibility     VisibilityFilter
+
+	// selected is the Selection: ticked Repo names within currentOrg. Per ADR-0005
+	// a Selection belongs to exactly one Org and never spans Orgs — it is reset
+	// whenever descend() starts a new Repo-pane session.
+	selected map[string]bool
+}
+
+func (m Model) selectionCount() int {
+	n := 0
+	for _, v := range m.selected {
+		if v {
+			n++
+		}
+	}
+	return n
 }
 
 // New constructs a Model. f is injected so this package's tests never depend on a
