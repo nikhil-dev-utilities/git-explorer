@@ -35,13 +35,36 @@ func Load(flags Flags, env Environ, fileBytes []byte) (Config, error) {
 
 	if len(fileBytes) > 0 {
 		if err := yaml.Unmarshal(fileBytes, &cfg); err != nil {
-			return Config{}, fmt.Errorf("parsing config: %w", err)
+			return Config{}, parseError(flags.ConfigPath, err)
 		}
 	}
 
 	cfg.Log.Path = resolveLogPath(flags, env, cfg.Log.Path)
+	resolveHostDefaultTargets(&cfg)
 
 	return cfg, nil
+}
+
+// parseError wraps a YAML parse failure, naming the file it came from when the caller
+// told Load which file it read — yaml.v3's own error already includes a line number,
+// which this preserves via %w.
+func parseError(configPath string, cause error) error {
+	if configPath == "" {
+		return fmt.Errorf("parsing config: %w", cause)
+	}
+	return fmt.Errorf("parsing config file %s: %w", configPath, cause)
+}
+
+// resolveHostDefaultTargets fills in each Host's effective default clone Target: its
+// own default_target if it set one, otherwise the global clone.default_target. Once
+// this runs, a Host's DefaultTarget is always the final value — callers never need to
+// know the fallback rule themselves.
+func resolveHostDefaultTargets(cfg *Config) {
+	for i := range cfg.Hosts {
+		if cfg.Hosts[i].DefaultTarget == "" {
+			cfg.Hosts[i].DefaultTarget = cfg.Clone.DefaultTarget
+		}
+	}
 }
 
 func defaultConfig() Config {
