@@ -101,6 +101,11 @@ type Model struct {
 	mode  Mode
 	focus Focus
 
+	// width and height come from the initial tea.WindowSizeMsg Bubble Tea always
+	// sends at startup, and any subsequent terminal resize. Zero until the first
+	// one arrives.
+	width, height int
+
 	orgs       []forge.Org
 	orgsCh     <-chan forge.OrgPage
 	orgsLoaded bool
