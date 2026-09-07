@@ -1,0 +1,4 @@
+/git-explorer
+/dist/
+*.test
+*.out
