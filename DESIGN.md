@@ -129,7 +129,21 @@ GitHub's two levels rather than generalised on spec (ADR-0001).
 
 ## Config
 
-Non-secret only, so it is safe in a dotfiles repo.
+Non-secret only, so it is safe in a dotfiles repo. See ADR-0004.
+
+**Location:** `$XDG_CONFIG_HOME/git-explorer/config.yaml`, falling back to
+`~/.config/git-explorer/config.yaml`. `--config <path>` overrides. macOS is not natively
+XDG, but `gh` already puts its config at `~/.config/gh`, and sitting next to the tool we
+depend on beats matching platform convention.
+
+**Format:** YAML, for the same reason — a user configuring a Host here has almost
+certainly just configured one in `gh`'s YAML, and the shape is nested (a list of Hosts
+with per-Host overrides) which reads better in YAML than in TOML.
+
+**No config file is required.** A fresh install with no file works: an implicit
+`github.com` Host over the gh-cli Frontdoor, `ssh` protocol, no default Target so the
+clone dialog opens empty. There is no first-run wizard and we never write the file
+ourselves — config is something the user owns, like their Target directory.
 
 ```yaml
 clone:
