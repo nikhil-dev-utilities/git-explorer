@@ -88,12 +88,18 @@ func (m Model) handleCloneRunKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 // From Fatal, nothing works except quitting or switching to a different Host — the
 // escape hatch DESIGN.md's failure-surfaces section offers instead of only quitting.
+// alt-h is ^y's mnemonic alias here too — it's the same "switch Host" action, on the
+// same ctrl key, as Browse's ^y/alt-h.
 func (m Model) handleFatalKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
 	case tea.KeyCtrlY:
 		return m.openHostSwitch(), nil
+	case tea.KeyRunes:
+		if msg.Alt && len(msg.Runes) == 1 && msg.Runes[0] == 'h' {
+			return m.openHostSwitch(), nil
+		}
 	}
 	return m, nil
 }
@@ -135,7 +141,17 @@ func (m Model) handleLeavePromptKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 // focus), then by focus for anything pane-specific. Every verb here lives on a key
 // ADR-0006 permits — see filter.go's cycle helpers and repos.go's descend/backToOrgs
 // for what each one does.
+//
+// An alt+letter combo is checked first: DESIGN.md's mnemonic alt aliases are always
+// additive to their ctrl counterpart, never a replacement, so this must never reach
+// the ordinary tea.KeyRunes case below (which would otherwise type the letter into
+// the focused filter) when the letter is one of the recognized aliases.
 func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if msg.Alt && msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		if mm, cmd, ok := m.handleBrowseAltKey(msg.Runes[0]); ok {
+			return mm, cmd
+		}
+	}
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
@@ -183,6 +199,42 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.editFilter(func(s string) string { return s + text }), nil
 	}
 	return m, nil
+}
+
+// handleBrowseAltKey dispatches Browse mode's alt-key aliases (DESIGN.md's "mnemonic
+// alt bindings" bonus, ~line 56). Each case calls exactly the same handler its ctrl
+// counterpart calls in the switch below — never a separate implementation that could
+// drift — so an alias is always a second path to an existing action, never a new one.
+// ok is false for any rune with no alias, telling the caller to fall through to
+// ordinary filter-text editing instead.
+func (m Model) handleBrowseAltKey(r rune) (Model, tea.Cmd, bool) {
+	switch r {
+	case 'c': // alt-c: Enter's alias — Orgs: descend · Repos: open clone dialog
+		mm, cmd := m.handleEnter()
+		return mm, cmd, true
+	case 'a': // alt-a: ^o's alias — select all matching
+		return m.selectAllMatching(), nil, true
+	case 'x': // alt-x: ^t's alias — cycle Affiliation (Orgs) / archived (Repos)
+		return m.cycleFirstFacet(), nil, true
+	case 'f': // alt-f: ^f's alias — cycle fork (Repos only)
+		if m.focus == FocusRepos {
+			m.forkFilter = nextTriState(m.forkFilter)
+		}
+		return m, nil, true
+	case 'v': // alt-v: ^v's alias — cycle visibility (Repos only)
+		if m.focus == FocusRepos {
+			m.visibility = nextVisibilityFilter(m.visibility)
+		}
+		return m, nil, true
+	case 's': // alt-s: ^s's alias — cycle sort
+		return m.cycleSort(), nil, true
+	case 'h': // alt-h: ^y's alias — switch Host
+		return m.openHostSwitch(), nil, true
+	case 'r': // alt-r: ^r's alias — retry a pane-scoped load failure
+		mm, cmd := m.retry()
+		return mm, cmd, true
+	}
+	return m, nil, false
 }
 
 func (m Model) editFilter(edit func(string) string) Model {

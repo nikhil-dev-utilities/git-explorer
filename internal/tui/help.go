@@ -10,56 +10,59 @@ import tea "github.com/charmbracelet/bubbletea"
 // at runtime) — accuracy against the real switch statements depends on updating both
 // together, the same discipline this package's tests already lean on elsewhere.
 //
-// No entry here uses an alt-key (Meta) alias: DESIGN.md names them as a bonus for
-// terminals that send Meta for Option, but no slice of this PRD actually wired one
-// up — every binding below is a ctrl key or a plain named key (Tab, Enter, Esc, F1,
-// arrows, or a single rune in a modal context where letters aren't filter text).
-// That's a real gap against DESIGN.md's original keymap table, left for a future
-// issue rather than silently claimed as done here.
+// altKey is DESIGN.md's mnemonic alt-key (Meta) alias — a bonus for terminals that
+// send Meta for Option, never a requirement — empty when a binding has none (Tab,
+// Enter's other uses, Esc, arrows, F1, and every single-rune modal binding have no
+// alt form). Every alt alias present here calls exactly the same handler its ctrl/
+// named-key counterpart does (see update.go's handleBrowseAltKey and
+// handleFatalKeyMsg), so it is always a second path to an existing action, never a
+// new one — TestKeymapTable_EveryActionHasACtrlOrNamedKey guards that an altKey never
+// appears on a row with no ctrl/named key.
 type keyBinding struct {
 	mode   string
 	key    string
+	altKey string
 	action string
 }
 
 var keymapTable = []keyBinding{
-	{"Browse", "type", "edit the focused pane's filter"},
-	{"Browse", "/", "switch the filter to regex"},
-	{"Browse", "↑/↓, ^p/^n", "move the cursor"},
-	{"Browse", "Enter", "Orgs: descend · Repos: open clone dialog"},
-	{"Browse", "Esc", "Repos: back to Orgs · Orgs: clear filter"},
-	{"Browse", "Tab", "tick/untick the focused Repo"},
-	{"Browse", "^o", "select all Repos matching the filter"},
-	{"Browse", "^t", "Orgs: cycle Affiliation · Repos: cycle archived"},
-	{"Browse", "^f", "Repos: cycle fork"},
-	{"Browse", "^v", "Repos: cycle visibility"},
-	{"Browse", "^s", "cycle sort: name ⇄ last activity"},
-	{"Browse", "^y", "switch Host"},
-	{"Browse", "^r", "retry a pane-scoped load failure"},
-	{"Browse", "F1", "this help screen"},
-	{"Browse", "^c", "quit"},
+	{"Browse", "type", "", "edit the focused pane's filter"},
+	{"Browse", "/", "", "switch the filter to regex"},
+	{"Browse", "↑/↓, ^p/^n", "", "move the cursor"},
+	{"Browse", "Enter", "alt-c", "Orgs: descend · Repos: open clone dialog"},
+	{"Browse", "Esc", "", "Repos: back to Orgs · Orgs: clear filter"},
+	{"Browse", "Tab", "", "tick/untick the focused Repo"},
+	{"Browse", "^o", "alt-a", "select all Repos matching the filter"},
+	{"Browse", "^t", "alt-x", "Orgs: cycle Affiliation · Repos: cycle archived"},
+	{"Browse", "^f", "alt-f", "Repos: cycle fork"},
+	{"Browse", "^v", "alt-v", "Repos: cycle visibility"},
+	{"Browse", "^s", "alt-s", "cycle sort: name ⇄ last activity"},
+	{"Browse", "^y", "alt-h", "switch Host"},
+	{"Browse", "^r", "alt-r", "retry a pane-scoped load failure"},
+	{"Browse", "F1", "", "this help screen"},
+	{"Browse", "^c", "", "quit"},
 
-	{"LeavePrompt", "c", "clone now"},
-	{"LeavePrompt", "d", "discard the Selection"},
-	{"LeavePrompt", "Esc", "stay"},
-	{"LeavePrompt", "^c", "quit"},
+	{"LeavePrompt", "c", "", "clone now"},
+	{"LeavePrompt", "d", "", "discard the Selection"},
+	{"LeavePrompt", "Esc", "", "stay"},
+	{"LeavePrompt", "^c", "", "quit"},
 
-	{"CloneDialog", "Tab", "toggle the org-subdirectory path"},
-	{"CloneDialog", "Enter", "confirm and start the Clone Run"},
-	{"CloneDialog", "Esc", "cancel, cloning nothing"},
-	{"CloneDialog", "^c", "quit"},
+	{"CloneDialog", "Tab", "", "toggle the org-subdirectory path"},
+	{"CloneDialog", "Enter", "", "confirm and start the Clone Run"},
+	{"CloneDialog", "Esc", "", "cancel, cloning nothing"},
+	{"CloneDialog", "^c", "", "quit"},
 
-	{"CloneRun", "^c", "cancel the run (while in flight) · quit (once done)"},
-	{"CloneRun", "r", "retry failed Repos only"},
-	{"CloneRun", "Esc", "done — back to Browse"},
+	{"CloneRun", "^c", "", "cancel the run (while in flight) · quit (once done)"},
+	{"CloneRun", "r", "", "retry failed Repos only"},
+	{"CloneRun", "Esc", "", "done — back to Browse"},
 
-	{"HostSwitch", "↑/↓, ^p/^n", "move the cursor"},
-	{"HostSwitch", "Enter", "switch to this Host"},
-	{"HostSwitch", "Esc", "cancel"},
-	{"HostSwitch", "^c", "quit"},
+	{"HostSwitch", "↑/↓, ^p/^n", "", "move the cursor"},
+	{"HostSwitch", "Enter", "", "switch to this Host"},
+	{"HostSwitch", "Esc", "", "cancel"},
+	{"HostSwitch", "^c", "", "quit"},
 
-	{"Fatal", "^y", "switch to a different Host"},
-	{"Fatal", "^c", "quit"},
+	{"Fatal", "^y", "alt-h", "switch to a different Host"},
+	{"Fatal", "^c", "", "quit"},
 }
 
 // openHelp is only ever reached from ModeBrowse (F1 is bound there and nowhere

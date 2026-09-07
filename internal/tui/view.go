@@ -56,7 +56,7 @@ func (m Model) viewHelp() string {
 			currentSection = kb.mode
 			fmt.Fprintf(&b, "%s\n", currentSection)
 		}
-		fmt.Fprintf(&b, "  %-14s %s\n", kb.key, kb.action)
+		fmt.Fprintf(&b, "  %-14s %-8s %s\n", kb.key, kb.altKey, kb.action)
 	}
 
 	b.WriteString("\n[esc] close\n")

@@ -56,17 +56,55 @@ func TestKeymapTable_CtrlCIsOnlyEverQuitOrCancel(t *testing.T) {
 	}
 }
 
-// TestKeymapTable_EveryActionHasACtrlOrNamedKey guards ADR-0006's other half: any
-// alt-key (Meta) alias must never be the *only* path to an action. Since no slice of
-// this PRD actually wired up alt-key aliases (see help.go's doc comment — a real gap
-// against DESIGN.md, left for a future issue), this is currently satisfied
-// vacuously: there are no "Alt+" entries in the table at all, so nothing can depend
-// on one exclusively. This test exists so it starts failing the moment someone adds
-// an alt-only entry without also adding the ctrl/named-key counterpart.
+// TestKeymapTable_EveryActionHasACtrlOrNamedKey guards ADR-0006's other half: an
+// alt-key (Meta) alias must never be the *only* path to an action. Every row's
+// primary key column (kb.key) must be a real ctrl/named key regardless of whether
+// that row also carries an altKey — an alt alias lives in its own column precisely
+// so it can never be entered here as if it were the primary binding.
 func TestKeymapTable_EveryActionHasACtrlOrNamedKey(t *testing.T) {
 	for _, kb := range keymapTable {
 		if strings.Contains(strings.ToLower(kb.key), "alt") {
-			t.Errorf("mode %s binds %q via an alt-only key with no corresponding ctrl/named-key entry found by this simple table scan", kb.mode, kb.key)
+			t.Errorf("mode %s binds %q via an alt-only key in the primary key column — alt aliases belong in altKey, not key", kb.mode, kb.key)
+		}
+		if kb.altKey != "" && kb.key == "" {
+			t.Errorf("mode %s has altKey %q but no primary ctrl/named key — an alt alias must never be the only path to an action", kb.mode, kb.altKey)
+		}
+	}
+}
+
+// TestKeymapTable_AltKeyAliasesMatchDesign guards the specific alt-key aliases
+// DESIGN.md commits to (its "mnemonic alt bindings" table) — a future edit to
+// keymapTable can't silently drop or rename one without this failing.
+func TestKeymapTable_AltKeyAliasesMatchDesign(t *testing.T) {
+	want := map[string]string{ // "mode|key" -> altKey
+		"Browse|Enter": "alt-c",
+		"Browse|^o":    "alt-a",
+		"Browse|^t":    "alt-x",
+		"Browse|^f":    "alt-f",
+		"Browse|^v":    "alt-v",
+		"Browse|^s":    "alt-s",
+		"Browse|^y":    "alt-h",
+		"Browse|^r":    "alt-r",
+		"Fatal|^y":     "alt-h",
+	}
+
+	got := map[string]string{}
+	for _, kb := range keymapTable {
+		if kb.altKey != "" {
+			got[kb.mode+"|"+kb.key] = kb.altKey
+		}
+	}
+
+	for k, wantAlt := range want {
+		if gotAlt, ok := got[k]; !ok {
+			t.Errorf("%s: no altKey entry found, want %q", k, wantAlt)
+		} else if gotAlt != wantAlt {
+			t.Errorf("%s: altKey = %q, want %q", k, gotAlt, wantAlt)
+		}
+	}
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			t.Errorf("%s: has an altKey not in DESIGN.md's table (or this test's expectations are stale)", k)
 		}
 	}
 }
