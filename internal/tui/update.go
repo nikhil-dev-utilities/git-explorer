@@ -14,6 +14,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleOrgsFatalErr(msg)
 	case repoListMsg:
 		return m.handleRepoList(msg)
+	case clonePreviewMsg:
+		return m.handleClonePreview(msg)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -34,6 +36,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleHostSwitchKeyMsg(msg)
 	case ModeFatal:
 		return m.handleFatalKeyMsg(msg)
+	case ModeCloneDialog:
+		return m.handleCloneDialogKeyMsg(msg)
+	}
+	return m, nil
+}
+
+func (m Model) handleCloneDialogKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		return m.leaveCloneDialog(), nil
+	case tea.KeyTab:
+		return m.toggleOrgSubdir()
 	}
 	return m, nil
 }
@@ -77,7 +93,7 @@ func (m Model) handleLeavePromptKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleLeavePromptEsc(), nil
 	case tea.KeyRunes:
 		if len(msg.Runes) == 1 {
-			return m.handleLeavePromptKey(msg.Runes[0]), nil
+			return m.handleLeavePromptKey(msg.Runes[0])
 		}
 	}
 	return m, nil
@@ -177,8 +193,9 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 	case FocusOrgs:
 		return m.descend()
 	case FocusRepos:
-		// Opening the clone dialog on a non-empty Selection is added in a later
-		// slice of this PRD (#27 introduces Selection; #31 introduces the dialog).
+		if m.selectionCount() > 0 {
+			return m.enterCloneDialog()
+		}
 		return m, nil
 	}
 	return m, nil

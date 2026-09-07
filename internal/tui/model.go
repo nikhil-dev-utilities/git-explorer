@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
@@ -146,6 +147,15 @@ type Model struct {
 	// a Selection belongs to exactly one Org and never spans Orgs — it is reset
 	// whenever descend() starts a new Repo-pane session.
 	selected map[string]bool
+
+	// clonePreview classifies a Selection against cloneTarget without cloning
+	// anything — injected so this package's tests never touch the filesystem or
+	// git. clonePreviewResults holds the live result, recomputed whenever
+	// cloneOrgSubdir changes.
+	clonePreview        ClonePreviewFunc
+	cloneTarget         string
+	cloneOrgSubdir      bool // always starts false — never remembered, per ADR-0007
+	clonePreviewResults []clone.Result
 }
 
 func (m Model) selectionCount() int {
@@ -158,16 +168,22 @@ func (m Model) selectionCount() int {
 	return n
 }
 
-// New constructs a Model. f is injected so this package's tests never depend on a
-// real Forge implementation. hosts must be non-empty; the first is active at launch.
-func New(f forge.Forge, hosts []forge.Host) Model {
+// New constructs a Model. f and preview are injected so this package's tests never
+// depend on a real Forge or touch the filesystem/git. hosts must be non-empty; the
+// first is active at launch. target pre-fills the clone dialog (from Config's
+// clone.default_target — empty is valid and means the dialog opens with no default,
+// exactly as DESIGN.md's zero-config case describes); it is never written back to
+// anything, only ever read.
+func New(f forge.Forge, hosts []forge.Host, preview ClonePreviewFunc, target string) Model {
 	if len(hosts) == 0 {
 		panic("tui.New: hosts must be non-empty")
 	}
 	return Model{
-		forge: f,
-		hosts: hosts,
-		mode:  ModeBrowse,
+		forge:        f,
+		hosts:        hosts,
+		mode:         ModeBrowse,
+		clonePreview: preview,
+		cloneTarget:  target,
 	}
 }
 
