@@ -19,7 +19,12 @@ type fakeForge struct {
 	// orgPagesByHost, if set, overrides orgPages on a per-Host-name basis — for
 	// host-switching tests, which need different Orgs to appear after switching.
 	orgPagesByHost map[string][]forge.OrgPage
-	listOrgsCalls  []forge.Host
+	// orgPagesSequence, if set, overrides orgPages per successive ListOrgs call —
+	// index 0 for the first call, index 1 for the second, and so on, holding at the
+	// last entry once exhausted. For retry tests: a call that fails followed by one
+	// that succeeds.
+	orgPagesSequence [][]forge.OrgPage
+	listOrgsCalls    []forge.Host
 
 	repos    map[string][]forge.Repo // keyed by Org name
 	reposErr error
@@ -28,6 +33,7 @@ type fakeForge struct {
 }
 
 func (f *fakeForge) ListOrgs(_ context.Context, host forge.Host) (<-chan forge.OrgPage, error) {
+	callIndex := len(f.listOrgsCalls)
 	f.listOrgsCalls = append(f.listOrgsCalls, host)
 	if f.orgsGate != nil {
 		<-f.orgsGate
@@ -36,7 +42,14 @@ func (f *fakeForge) ListOrgs(_ context.Context, host forge.Host) (<-chan forge.O
 		return nil, f.orgsErr
 	}
 	pages := f.orgPages
-	if f.orgPagesByHost != nil {
+	switch {
+	case f.orgPagesSequence != nil:
+		i := callIndex
+		if i >= len(f.orgPagesSequence) {
+			i = len(f.orgPagesSequence) - 1
+		}
+		pages = f.orgPagesSequence[i]
+	case f.orgPagesByHost != nil:
 		pages = f.orgPagesByHost[host.Name]
 	}
 	ch := make(chan forge.OrgPage, len(pages))

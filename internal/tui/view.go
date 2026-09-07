@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 func (m Model) View() string {
@@ -16,8 +17,36 @@ func (m Model) View() string {
 		return fmt.Sprintf("clone dialog: %d repos selected\n", m.selectionCount())
 	case ModeHostSwitch:
 		return m.viewHostSwitch()
+	case ModeFatal:
+		return m.viewFatal()
 	}
 	return ""
+}
+
+// viewFatal is the whole screen: nothing else in the app works until this is fixed,
+// so nothing else is shown. The message already names the fix command — Forge
+// supplies that text (PRD 1) — this package never re-derives or duplicates it.
+func (m Model) viewFatal() string {
+	var b strings.Builder
+	b.WriteString("Fatal\n\n")
+	if m.fatalErr != nil {
+		fmt.Fprintf(&b, "%v\n\n", m.fatalErr)
+	}
+	b.WriteString("[^y] switch host  [^c] quit\n")
+	return b.String()
+}
+
+// statusLine renders a Transient error (a rate limit, typically), with its
+// RetryAfter, or nothing when there isn't one. It never replaces or obscures pane
+// content — callers append it, they don't return it in place of the pane.
+func (m Model) statusLine() string {
+	if m.transientErr == nil {
+		return ""
+	}
+	if d := retryAfter(m.transientErr); d > 0 {
+		return fmt.Sprintf("%v — retrying in %s\n", m.transientErr, d.Round(time.Second))
+	}
+	return fmt.Sprintf("%v\n", m.transientErr)
 }
 
 func (m Model) viewHostSwitch() string {
@@ -49,12 +78,17 @@ func (m Model) viewLeavePrompt() string {
 // is a later slice of this PRD (#30) — this slice's job is the navigation and
 // filtering underneath it, not the final two-column composition.
 func (m Model) viewBrowse() string {
+	var pane string
 	switch m.focus {
 	case FocusRepos:
-		return m.viewRepoPane()
+		pane = m.viewRepoPane()
 	default:
-		return m.viewOrgPane()
+		pane = m.viewOrgPane()
 	}
+	if status := m.statusLine(); status != "" {
+		return pane + "\n" + status
+	}
+	return pane
 }
 
 func (m Model) viewOrgPane() string {
@@ -63,6 +97,14 @@ func (m Model) viewOrgPane() string {
 	fmt.Fprintf(&b, "%s\n", m.orgFilter)
 	if m.orgAffiliation != AffiliationFilterAll {
 		fmt.Fprintf(&b, "affiliation: %s\n", affiliationFilterLabel(m.orgAffiliation))
+	}
+
+	if m.orgsErr != nil {
+		fmt.Fprintf(&b, "error loading orgs: %v  [^r] retry\n", m.orgsErr)
+		if len(m.orgs) == 0 {
+			return b.String()
+		}
+		b.WriteString("(showing what already loaded)\n")
 	}
 
 	visible := filterOrgsByAffiliation(m.orgs, m.orgFilter, m.orgAffiliation)
@@ -99,7 +141,7 @@ func (m Model) viewRepoPane() string {
 		visibilityFilterLabel(m.visibility), sortModeLabel(m.repoSort))
 
 	if m.reposErr != nil {
-		fmt.Fprintf(&b, "error loading repos: %v\n", m.reposErr)
+		fmt.Fprintf(&b, "error loading repos: %v  [^r] retry\n", m.reposErr)
 		return b.String()
 	}
 

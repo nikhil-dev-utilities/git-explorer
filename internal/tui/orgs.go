@@ -66,20 +66,15 @@ func (m Model) handleOrgPage(msg orgPageMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.page.Err != nil {
-		// Pane-scoped: a later slice renders this distinctly and offers retry.
 		// Whatever loaded on earlier pages (already appended to m.orgs on prior
-		// calls) is deliberately left untouched here.
-		m.orgsErr = msg.page.Err
-		m.orgsLoaded = true
-		return m, nil
+		// calls) is deliberately left untouched — applyOrgsFailure only sets
+		// orgsLoaded and the classified error field.
+		return m.applyOrgsFailure(msg.page.Err), nil
 	}
 	m.orgs = append(m.orgs, msg.page.Orgs...)
 	return m, readNextPageCmd(msg.ch)
 }
 
 func (m Model) handleOrgsFatalErr(msg orgsFatalErrMsg) (Model, tea.Cmd) {
-	// A later slice of this PRD renders this as the full-screen Fatal mode.
-	m.orgsFatalErr = msg.err
-	m.orgsLoaded = true
-	return m, nil
+	return m.applyOrgsFailure(msg.err), nil
 }
