@@ -101,8 +101,12 @@ type OrgPage struct {
 
 // Forge is the only interface the rest of git-explorer depends on to talk to a Host.
 type Forge interface {
-	// ListOrgs streams Orgs for the given Host. The returned error is fatal — returned
-	// before any page is sent — and distinct from a per-page error carried on OrgPage.
+	// ListOrgs streams Orgs for the given Host. A synchronous error return happens
+	// before any page is sent — typically because the Host itself is unreachable
+	// (not authenticated, gh missing), so it is usually ErrKindFatal, but callers
+	// should still inspect Kind rather than assume it. It is otherwise equivalent to
+	// a per-page error carried on OrgPage: both mean the stream produced nothing
+	// after this point, and any pages already sent remain valid.
 	ListOrgs(ctx context.Context, host Host) (<-chan OrgPage, error)
 
 	// ListRepos is called lazily, only once an Org has been selected.
