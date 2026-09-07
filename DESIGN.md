@@ -16,7 +16,7 @@ Two fixed columns, always.
 
 ```
 ┌─ Orgs ─────────────────┬─ Repos: acme ───────────────────────────┐
-│ / plat                 │ / tf-                          38 → 6   │
+│ plat█                  │ tf-                            38 → 6   │
 │ affiliation: any       │ archived: hide · forks: hide · vis: all │
 │────────────────────────│─────────────────────────────────────────│
 │ acme          member   │ [x] tf-network              2d ago      │
@@ -24,16 +24,73 @@ Two fixed columns, always.
 │ platform-ops  —      > │ [x] tf-vpc                  3h ago      │
 │ globex        owner    │ [ ] tf-modules   archived   1y ago      │
 └────────────────────────┴─────────────────────────────────────────┘
- host: ghe.corp.internal · [h] switch · 3 selected · [c] clone · [?] help
+ host: ghe.corp.internal · 3 selected · ^y host · enter clone · F1 help
 ```
 
 - Left pane: Orgs, filtered by name and Affiliation. No repo counts — see ADR-0002.
 - Right pane: Repos of the focused Org, with `pushed_at` and state badges.
 - Sort: name or last activity, in either pane.
-- Filter: substring, case-insensitive. A leading `/` switches the box to regex.
-  Starts-with and ends-with are deliberately absent — `^foo` and `foo$` cover them.
-- `select all matching` is a first-class key. Filter to `tf-`, hit it, done. That one
+- Filter: substring, case-insensitive. A leading `/` switches the box to regex — a Repo
+  name cannot begin with `/`, so this is unambiguous. Starts-with and ends-with are
+  deliberately absent; `^foo` and `foo$` cover them.
+- `select all matching` is a first-class key. Filter to `tf-`, hit `^o`, done. That one
   combination is most of the job.
+
+### Interaction
+
+The filter box is **always focused** — you type and the list narrows, fzf-style, with no
+key needed to begin. The cost is deliberate and paid up front: every verb needs a
+modifier, because every letter is text.
+
+Several obvious bindings are unavailable and must not be used. `ctrl-h` **is** backspace
+and `ctrl-i` **is** Tab; binding either breaks text editing. `ctrl-m`/`ctrl-[` are
+Enter/Esc. `ctrl-a`, `ctrl-e`, `ctrl-u`, `ctrl-w` and `ctrl-k` are readline
+home/end/kill, which users will expect to work *inside the filter box*. `ctrl-c`,
+`ctrl-z` and `ctrl-d` belong to the terminal.
+
+The ctrl keymap is the documented baseline and works in a stock Terminal.app with no
+configuration. The mnemonic alt bindings are additionally bound and cost a few lines in
+the key handler; they are a bonus for terminals that send Meta, never a requirement. Help
+lists both.
+
+| Key | Alt alias | Action |
+|---|---|---|
+| *any printable* | | edit the filter live |
+| `↑` `↓` / `^p` `^n` | | move the cursor |
+| `Tab` / `Shift-Tab` | | tick / tick and move up (fzf convention) |
+| `Enter` | `alt-c` | Orgs: descend to Repos · Repos: open the clone dialog |
+| `Esc` | | Repos: back to Orgs (prompts if the Selection is non-empty) · Orgs: clear filter |
+| `^o` | `alt-a` | select all matching the current filter |
+| `^t` `^f` `^v` | `alt-x` `alt-f` `alt-v` | cycle archived / fork / visibility |
+| `^s` | `alt-s` | cycle sort: name ⇄ last activity |
+| `^y` | `alt-h` | switch Host |
+| `^r` | `alt-r` | reload the current pane |
+| `^c` | | quit |
+| `F1` | | help |
+
+### Failure surfaces
+
+Errors are scoped to their blast radius rather than funnelled through one widget.
+
+- **Fatal** — full screen, with the exact command to fix it. Missing `git` or `gh`, or no
+  `gh` auth for the active Host. Nothing else in the app works, so nothing else is shown.
+  Offers `^y` to pick another Host rather than only `^c` to quit.
+- **Pane-scoped** — inline in the affected pane, *keeping whatever already loaded*. A
+  progressive load that dies at page 15 keeps its 1,400 Orgs and offers `^r`. Losing them
+  to a network blip would be the worst possible response.
+- **Transient** — the status line. Rate limits with a retry countdown, and anything that
+  resolves itself by waiting.
+
+Empty states are distinguishable from each other and from loading: "no Repos in this
+Org", "no matches for `tf-`", and an explicit loading indicator are three different
+messages, never one blank pane.
+
+### Narrow terminals
+
+The Org pane is fixed at 28 columns and the Repo pane takes the remainder. As width
+drops, the Repo row sheds the date column first, then state badges, keeping the name
+longest. Below 60 columns the app renders a single "terminal too narrow" message rather
+than a broken layout.
 
 ## Data flow
 
