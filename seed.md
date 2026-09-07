@@ -1,0 +1,16 @@
+- git-explorer is a Go lang TUI that allows a user to explore all repos and orginizations on public or private Github installs.
+- it should be designed to later allow support to explore Gitlab too. So a pluggable backend.
+- Github access should support multiple frontdoors, starting with github-cli.
+- The UI should present something similar to MacOS's finder like in Column's view. Start with showing org's and then repos under the selected org.
+  - Note the user might not be a memeber of all orgs, but still need to see them, so the org view must be able to view all orgs the user creds can access regardless of membership.
+  - The view should include the last updated date for any repo under the org.
+- There needs to be a filter capability for all panes (orgs and repos)
+  - Name based filtering (starts with, ends with, contains - would regex search be a good fit here?)
+  - Archived status
+  - Any other suggestions?
+- The repo view should allow selecting 0..N repos
+  - After selection the user can choose to clone all selected repos to a target directory.
+    - If the repo is already clones, don't overwrite it, leave it as-is.
+- The TUI libraries we could pick from are bubbletea or glyph (useglyph.sh).
+- We need some test coverage and CI to run tests pre-merge.
+- We need automatic releases of the binary targetting different OSes that publish to the releases page of the repo on Github with a versioning strategy that starts from 0.1.0 
