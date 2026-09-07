@@ -21,6 +21,15 @@ type Result struct {
 // time, never exceeded even transiently. It never aborts on a single failure: every
 // Repo gets a Result, regardless of what happened to any other, and Skipped/Conflict
 // Repos are reported with no clone subprocess ever attempted for them.
+//
+// Cancelling ctx stops any further clone from being dispatched — checked explicitly
+// before each one, not left to chance — and terminates whichever clone(s) are already
+// in flight (runGit's exec.CommandContext kills the subprocess when ctx is done).
+// Repos that had already completed before cancellation keep their Outcome and Result
+// untouched; Repos never dispatched get ctx.Err() as their Result's Err. Run returns
+// as soon as every already-dispatched clone has actually finished (successfully,
+// with an error, or killed by the cancellation) — it does not wait on work that was
+// never started.
 func Run(ctx context.Context, target string, repos []Repo, orgSubdir bool, parallelism int) []Result {
 	results := make([]Result, len(repos))
 
@@ -45,9 +54,30 @@ func Run(ctx context.Context, target string, repos []Repo, orgSubdir bool, paral
 	sem := make(chan struct{}, parallelism)
 	var wg sync.WaitGroup
 
+dispatch:
 	for _, j := range jobs {
+		if ctx.Err() != nil {
+			results[j.index].Err = ctx.Err()
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			results[j.index].Err = ctx.Err()
+			continue dispatch
+		case sem <- struct{}{}:
+			// select's case order is not a preference: if ctx became Done at
+			// essentially the same moment a slot freed, both cases can be ready
+			// simultaneously and select picks between them at random. Re-check
+			// deterministically rather than let that coin flip decide whether one
+			// more clone gets dispatched after cancellation.
+			if ctx.Err() != nil {
+				<-sem
+				results[j.index].Err = ctx.Err()
+				continue dispatch
+			}
+		}
+
 		wg.Add(1)
-		sem <- struct{}{}
 		go func(j job) {
 			defer wg.Done()
 			defer func() { <-sem }()
