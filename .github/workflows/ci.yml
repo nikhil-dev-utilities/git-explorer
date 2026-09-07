@@ -1,0 +1,45 @@
+# Required PR gate. The commitlint job checks the PR title (not every commit) against
+# Conventional Commits — squash-merge makes the PR title the commit message that lands
+# on main, and release-please's version computation depends on it being well-formed.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-vet-test:
+    name: build, vet, test, gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.2"
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: go test -race
+        run: go test ./... -race
+
+  commitlint:
+    name: conventional commits (PR title)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
