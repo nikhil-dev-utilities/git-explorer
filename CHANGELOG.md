@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.1.0...v0.1.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **ci:** run GoReleaser in the same workflow run as release-please ([#54](https://github.com/nikhil-dev-utilities/git-explorer/issues/54)) ([0953aab](https://github.com/nikhil-dev-utilities/git-explorer/commit/0953aab17ec82651796cd676ca1479b95c04063e))
+
 ## 0.1.0 (2026-09-07)
 
 
