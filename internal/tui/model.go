@@ -1,0 +1,66 @@
+// Package tui implements git-explorer's Bubble Tea shell: the two-pane Org/Repo
+// browser, selection, clone dialog, and clone run. It depends on forge.Forge purely as
+// an injected interface and never imports internal/forge/github — nor does it import
+// internal/clone's execution path directly; clone execution and preview are injected
+// as func values (see clone.go, added in a later slice) so this package's tests never
+// touch a network or a subprocess. See DESIGN.md and ADR-0005/0006.
+package tui
+
+import (
+	"context"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
+)
+
+// Mode is the Model's explicit state, driving both Update dispatch and View
+// rendering. Later slices of this PRD add LeavePrompt, CloneDialog, CloneRun,
+// HostSwitch, Fatal, and Help.
+type Mode int
+
+const (
+	// ModeBrowse is the default mode: the Org and (once a slice adds it) Repo panes,
+	// each with an always-focused live filter.
+	ModeBrowse Mode = iota
+)
+
+// Model is git-explorer's Bubble Tea model.
+type Model struct {
+	forge forge.Forge
+	host  forge.Host
+
+	mode Mode
+
+	orgs       []forge.Org
+	orgsCh     <-chan forge.OrgPage
+	orgsLoaded bool
+	// orgsErr and orgsFatalErr are recorded but not yet rendered distinctly — the
+	// failure-surfaces slice of this PRD builds the Fatal / pane-scoped presentation
+	// on top of these.
+	orgsErr      error
+	orgsFatalErr error
+
+	orgFilter string
+}
+
+// New constructs a Model. f is injected so this package's tests never depend on a
+// real Forge implementation.
+func New(f forge.Forge, host forge.Host) Model {
+	return Model{
+		forge: f,
+		host:  host,
+		mode:  ModeBrowse,
+	}
+}
+
+func (m Model) Init() tea.Cmd {
+	return listOrgsCmd(m.forge, m.host)
+}
+
+// backgroundCtx is used for commands dispatched from Update. A later slice of this
+// PRD (cancellation for the Clone Run) introduces a cancellable context for that
+// specific operation; Org/Repo loading has no cancellation requirement of its own.
+func backgroundCtx() context.Context {
+	return context.Background()
+}
