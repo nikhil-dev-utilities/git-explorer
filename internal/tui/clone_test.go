@@ -22,10 +22,16 @@ func cloneDialogRepoFixture() map[string][]forge.Repo {
 }
 
 // newTestModelWithPreview is newTestModel with an explicit ClonePreviewFunc and
-// target — otherwise identical.
+// target, and noopCloneRunner (tests that need a real one use
+// newTestModelWithCloneRunner instead) — otherwise identical.
 func newTestModelWithPreview(t *testing.T, f *fakeForge, preview ClonePreviewFunc, target string) *teatest.TestModel {
 	t.Helper()
-	m := New(f, []forge.Host{{Name: "github.com"}}, preview, target)
+	return newTestModelWithCloneRunner(t, f, preview, noopCloneRunner, target)
+}
+
+func newTestModelWithCloneRunner(t *testing.T, f *fakeForge, preview ClonePreviewFunc, runner CloneRunnerFunc, target string) *teatest.TestModel {
+	t.Helper()
+	m := New(f, []forge.Host{{Name: "github.com"}}, preview, runner, target, 8)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 24))
 	t.Cleanup(func() { _ = tm.Quit() })
 	return tm

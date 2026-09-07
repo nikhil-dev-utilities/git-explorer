@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 )
 
 func (m Model) View() string {
@@ -16,6 +18,8 @@ func (m Model) View() string {
 		return m.viewLeavePrompt()
 	case ModeCloneDialog:
 		return m.viewCloneDialog()
+	case ModeCloneRun:
+		return m.viewCloneRun()
 	case ModeHostSwitch:
 		return m.viewHostSwitch()
 	case ModeFatal:
@@ -88,7 +92,47 @@ func (m Model) viewCloneDialog() string {
 	for _, r := range m.clonePreviewResults {
 		fmt.Fprintf(&b, "%-30s %-10s %s\n", r.Repo.Name, r.Outcome, r.Dest)
 	}
-	b.WriteString("\n[esc] cancel\n")
+	b.WriteString("\n[enter] clone  [esc] cancel\n")
+	return b.String()
+}
+
+// viewCloneRun shows an indeterminate in-flight state while the single tea.Cmd
+// wrapping CloneRunnerFunc is running (see clonerun.go's doc comment for why this
+// isn't per-Repo live progress), then the full breakdown — grouped by Outcome, with
+// failures called out individually — once cloneRunResultMsg arrives.
+func (m Model) viewCloneRun() string {
+	var b strings.Builder
+
+	if m.cloneRunInFlight {
+		b.WriteString("cloning...\n\n[^c] cancel\n")
+		return b.String()
+	}
+
+	var cloned, skipped, conflict, failed []clone.Result
+	for _, r := range m.cloneRunResults {
+		switch {
+		case r.Err != nil:
+			failed = append(failed, r)
+		case r.Outcome == clone.OutcomeSkipped:
+			skipped = append(skipped, r)
+		case r.Outcome == clone.OutcomeConflict:
+			conflict = append(conflict, r)
+		default:
+			cloned = append(cloned, r)
+		}
+	}
+
+	fmt.Fprintf(&b, "cloned: %d  skipped: %d  conflict: %d  failed: %d\n\n",
+		len(cloned), len(skipped), len(conflict), len(failed))
+
+	if len(failed) > 0 {
+		b.WriteString("failed:\n")
+		for _, r := range failed {
+			fmt.Fprintf(&b, "  %-30s %v\n", r.Repo.Name, r.Err)
+		}
+		b.WriteString("\n[r] retry failures")
+	}
+	b.WriteString("  [esc] done\n")
 	return b.String()
 }
 
