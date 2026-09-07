@@ -1,0 +1,87 @@
+package config
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Flags carries the command-line values that can override configuration, gathered by
+// a thin wrapper (not part of this package) from the actual flag parser. An empty
+// string means the flag was not set.
+type Flags struct {
+	// ConfigPath is --config: which file to read. Not used by Load itself (the
+	// wrapper decides what to read using it and passes the result as fileBytes) —
+	// kept here only so a future error path can name the file a parse failure came
+	// from.
+	ConfigPath string
+	// LogFile is --log-file: the highest-precedence source for the log path.
+	LogFile string
+}
+
+// Load resolves a Config from already-retrieved inputs — it never touches the
+// filesystem or environment itself, which is what makes it trivially unit-testable.
+// A thin wrapper (not part of this package) is responsible for the actual XDG lookup,
+// environment reads, and file read.
+//
+// With empty fileBytes (no config file present, or none configured), Load returns the
+// documented implicit defaults: one Host (github.com, gh-cli Frontdoor, ssh protocol),
+// no default Target, info log level, parallelism 8, and the log path resolved against
+// flags/env/XDG default (see resolveLogPath) — there being no config file at all is
+// not an error.
+func Load(flags Flags, env Environ, fileBytes []byte) (Config, error) {
+	cfg := defaultConfig()
+
+	if len(fileBytes) > 0 {
+		if err := yaml.Unmarshal(fileBytes, &cfg); err != nil {
+			return Config{}, fmt.Errorf("parsing config: %w", err)
+		}
+	}
+
+	cfg.Log.Path = resolveLogPath(flags, env, cfg.Log.Path)
+
+	return cfg, nil
+}
+
+func defaultConfig() Config {
+	return Config{
+		Clone: CloneConfig{
+			Parallelism: 8,
+		},
+		Log: LogConfig{
+			Level:     "info",
+			MaxSizeMB: 5,
+		},
+		Hosts: []HostConfig{
+			{Name: "github.com", Frontdoor: "gh-cli", Protocol: "ssh"},
+		},
+	}
+}
+
+// resolveLogPath applies the log path precedence documented in DESIGN.md:
+// --log-file flag > GIT_EXPLORER_LOG env var > log.path in the config file (already
+// parsed into fileLogPath by the time this runs) > the XDG state default.
+func resolveLogPath(flags Flags, env Environ, fileLogPath string) string {
+	if flags.LogFile != "" {
+		return flags.LogFile
+	}
+	if v := env.Getenv("GIT_EXPLORER_LOG"); v != "" {
+		return v
+	}
+	if fileLogPath != "" {
+		return fileLogPath
+	}
+	return defaultLogPath(env)
+}
+
+// defaultLogPath is $XDG_STATE_HOME/git-explorer/git-explorer.log, falling back to
+// ~/.local/state/git-explorer/git-explorer.log when XDG_STATE_HOME is unset. Neither
+// the binary's own directory nor the working directory is ever considered.
+func defaultLogPath(env Environ) string {
+	stateHome := env.Getenv("XDG_STATE_HOME")
+	if stateHome == "" {
+		stateHome = filepath.Join(env.Getenv("HOME"), ".local", "state")
+	}
+	return filepath.Join(stateHome, "git-explorer", "git-explorer.log")
+}
