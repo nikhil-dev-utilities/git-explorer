@@ -29,6 +29,11 @@ func TestHelp_F1OpensAndListsRealBindings(t *testing.T) {
 			t.Errorf("View() = %q, want it to mention %q", view, want)
 		}
 	}
+	// The alt-key column: proves the alias actually renders, not just exists in the
+	// table.
+	if !strings.Contains(view, "alt-a") {
+		t.Errorf("View() = %q, want it to mention the alt-a alias", view)
+	}
 }
 
 func TestHelp_EscReturnsToBrowse(t *testing.T) {
