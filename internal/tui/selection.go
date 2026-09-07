@@ -1,5 +1,7 @@
 package tui
 
+import tea "github.com/charmbracelet/bubbletea"
+
 // toggleSelected ticks or unticks the Repo currently under the cursor in the Repo
 // pane's filtered list.
 func (m Model) toggleSelected() Model {
@@ -58,19 +60,16 @@ func (m Model) leaveRepos() Model {
 	return m
 }
 
-func (m Model) handleLeavePromptKey(r rune) Model {
+func (m Model) handleLeavePromptKey(r rune) (Model, tea.Cmd) {
 	switch r {
 	case 'c':
-		// Handing off to the Clone Dialog (#31) — mode transition and Selection
-		// only; the dialog's own rendering and behavior are that slice's job.
-		m.mode = ModeCloneDialog
-		return m
+		return m.enterCloneDialog()
 	case 'd':
 		m.selected = nil
 		m.mode = ModeBrowse
-		return m.backToOrgs()
+		return m.backToOrgs(), nil
 	}
-	return m
+	return m, nil
 }
 
 func (m Model) handleLeavePromptEsc() Model {

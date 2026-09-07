@@ -15,7 +15,7 @@ import (
 // layout tests below — otherwise identical (single default Host, same cleanup).
 func newTestModelAtWidth(t *testing.T, f *fakeForge, width int) *teatest.TestModel {
 	t.Helper()
-	m := New(f, []forge.Host{{Name: "github.com"}})
+	m := New(f, []forge.Host{{Name: "github.com"}}, noopClonePreview, "")
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(width, 24))
 	t.Cleanup(func() {
 		_ = tm.Quit()

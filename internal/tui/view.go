@@ -15,8 +15,7 @@ func (m Model) View() string {
 	case ModeLeavePrompt:
 		return m.viewLeavePrompt()
 	case ModeCloneDialog:
-		// Built out by a later slice of this PRD (#31).
-		return fmt.Sprintf("clone dialog: %d repos selected\n", m.selectionCount())
+		return m.viewCloneDialog()
 	case ModeHostSwitch:
 		return m.viewHostSwitch()
 	case ModeFatal:
@@ -65,6 +64,31 @@ func (m Model) viewHostSwitch() string {
 		}
 		fmt.Fprintf(&b, "%s%s %s\n", cursor, active, h.Name)
 	}
+	return b.String()
+}
+
+// viewCloneDialog shows the exact destination path for every selected Repo — sourced
+// from clonePreviewResults, which clone.TargetPath (via the injected
+// ClonePreviewFunc) computed, never a reimplementation of that logic here — plus its
+// pre-flight classification, updating live as the org-subdirectory toggle flips.
+func (m Model) viewCloneDialog() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "clone %d repos to %s\n", m.selectionCount(), m.cloneTarget)
+	subdir := "off"
+	if m.cloneOrgSubdir {
+		subdir = "on"
+	}
+	fmt.Fprintf(&b, "[tab] org-subdirectory: %s\n\n", subdir)
+
+	if len(m.clonePreviewResults) == 0 {
+		b.WriteString("classifying...\n")
+		return b.String()
+	}
+
+	for _, r := range m.clonePreviewResults {
+		fmt.Fprintf(&b, "%-30s %-10s %s\n", r.Repo.Name, r.Outcome, r.Dest)
+	}
+	b.WriteString("\n[esc] cancel\n")
 	return b.String()
 }
 
