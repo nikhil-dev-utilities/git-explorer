@@ -31,6 +31,9 @@ const (
 	// ModeHostSwitch lists every configured Host, letting the user pick a new
 	// active one without restarting the app.
 	ModeHostSwitch
+	// ModeFatal takes over the whole screen: nothing else in the app works until
+	// it's fixed (not authenticated, gh/git missing), so nothing else is shown.
+	ModeFatal
 )
 
 // Focus is which of the two Browse-mode panes is currently receiving key input.
@@ -101,11 +104,9 @@ type Model struct {
 	orgs       []forge.Org
 	orgsCh     <-chan forge.OrgPage
 	orgsLoaded bool
-	// orgsErr and orgsFatalErr are recorded but not yet rendered distinctly — the
-	// failure-surfaces slice of this PRD builds the Fatal / pane-scoped presentation
-	// on top of these.
-	orgsErr      error
-	orgsFatalErr error
+	// orgsErr is a pane-scoped failure loading Orgs (some pages may have already
+	// loaded and remain in orgs, untouched) — rendered inline in the Org pane.
+	orgsErr error
 
 	orgFilter string
 	orgCursor int
@@ -118,7 +119,16 @@ type Model struct {
 	currentOrg  forge.Org
 	repos       []forge.Repo
 	reposLoaded bool
-	reposErr    error
+	// reposErr is a pane-scoped failure loading Repos for currentOrg, rendered
+	// inline in the Repo pane.
+	reposErr error
+
+	// fatalErr takes over the whole screen (ModeFatal) — set from either Org or
+	// Repo loading, whichever failed fatally.
+	fatalErr error
+	// transientErr renders in the status line only, from either pane, never
+	// disturbing what's already shown.
+	transientErr error
 
 	repoFilter     string
 	repoCursor     int

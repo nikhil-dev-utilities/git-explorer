@@ -28,6 +28,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleLeavePromptKeyMsg(msg)
 	case ModeHostSwitch:
 		return m.handleHostSwitchKeyMsg(msg)
+	case ModeFatal:
+		return m.handleFatalKeyMsg(msg)
+	}
+	return m, nil
+}
+
+// From Fatal, nothing works except quitting or switching to a different Host — the
+// escape hatch DESIGN.md's failure-surfaces section offers instead of only quitting.
+func (m Model) handleFatalKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyCtrlY:
+		return m.openHostSwitch(), nil
 	}
 	return m, nil
 }
@@ -101,6 +115,8 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.cycleSort(), nil
 	case tea.KeyCtrlY:
 		return m.openHostSwitch(), nil
+	case tea.KeyCtrlR:
+		return m.retry()
 	case tea.KeyBackspace:
 		return m.editFilter(func(s string) string {
 			if len(s) == 0 {

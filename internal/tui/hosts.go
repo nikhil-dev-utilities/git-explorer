@@ -32,7 +32,8 @@ func (m Model) confirmHostSwitch() (Model, tea.Cmd) {
 	m.orgsCh = nil
 	m.orgsLoaded = false
 	m.orgsErr = nil
-	m.orgsFatalErr = nil
+	m.fatalErr = nil
+	m.transientErr = nil
 	m.orgFilter = ""
 	m.orgCursor = 0
 

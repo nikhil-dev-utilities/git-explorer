@@ -23,11 +23,10 @@ func listReposCmd(f forge.Forge, org forge.Org) tea.Cmd {
 }
 
 func (m Model) handleRepoList(msg repoListMsg) (Model, tea.Cmd) {
-	m.reposLoaded = true
 	if msg.err != nil {
-		m.reposErr = msg.err
-		return m, nil
+		return m.applyReposFailure(msg.err), nil
 	}
+	m.reposLoaded = true
 	m.repos = msg.repos
 	return m, nil
 }
