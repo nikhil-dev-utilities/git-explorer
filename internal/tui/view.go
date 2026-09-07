@@ -13,12 +13,28 @@ func (m Model) View() string {
 	return ""
 }
 
+// viewBrowse renders whichever pane has focus. True side-by-side column layout
+// (Org pane fixed width, Repo pane taking the remainder, responsive column-shedding)
+// is a later slice of this PRD (#30) — this slice's job is the navigation and
+// filtering underneath it, not the final two-column composition.
 func (m Model) viewBrowse() string {
+	switch m.focus {
+	case FocusRepos:
+		return m.viewRepoPane()
+	default:
+		return m.viewOrgPane()
+	}
+}
+
+func (m Model) viewOrgPane() string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%s\n", m.orgFilter)
+	if m.orgAffiliation != AffiliationFilterAll {
+		fmt.Fprintf(&b, "affiliation: %s\n", affiliationFilterLabel(m.orgAffiliation))
+	}
 
-	visible := filterOrgs(m.orgs, m.orgFilter)
+	visible := filterOrgsByAffiliation(m.orgs, m.orgFilter, m.orgAffiliation)
 
 	if len(visible) == 0 {
 		switch {
@@ -32,8 +48,103 @@ func (m Model) viewBrowse() string {
 		return b.String()
 	}
 
-	for _, o := range visible {
-		fmt.Fprintf(&b, "%-20s %s\n", o.Name, o.Affiliation)
+	for i, o := range visible {
+		cursor := "  "
+		if i == m.orgCursor {
+			cursor = "> "
+		}
+		fmt.Fprintf(&b, "%s%-20s %s\n", cursor, o.Name, o.Affiliation)
 	}
 	return b.String()
+}
+
+func (m Model) viewRepoPane() string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "repos: %s\n", m.currentOrg.Name)
+	fmt.Fprintf(&b, "%s\n", m.repoFilter)
+	fmt.Fprintf(&b, "archived: %s · fork: %s · visibility: %s · sort: %s\n",
+		triStateLabel(m.archivedFilter), triStateLabel(m.forkFilter),
+		visibilityFilterLabel(m.visibility), sortModeLabel(m.repoSort))
+
+	if m.reposErr != nil {
+		fmt.Fprintf(&b, "error loading repos: %v\n", m.reposErr)
+		return b.String()
+	}
+
+	visible := sortRepos(filterRepos(m.repos, m.repoFilter, m.archivedFilter, m.forkFilter, m.visibility), m.repoSort)
+
+	if len(visible) == 0 {
+		switch {
+		case !m.reposLoaded:
+			b.WriteString("loading...\n")
+		case m.repoFilter != "" && len(m.repos) > 0:
+			fmt.Fprintf(&b, "no matches for %q\n", m.repoFilter)
+		default:
+			b.WriteString("no repos\n")
+		}
+		return b.String()
+	}
+
+	for i, r := range visible {
+		cursor := "  "
+		if i == m.repoCursor {
+			cursor = "> "
+		}
+		badges := ""
+		if r.Archived {
+			badges += "archived "
+		}
+		if r.Fork {
+			badges += "fork "
+		}
+		fmt.Fprintf(&b, "%s%-30s %s%s\n", cursor, r.Name, badges, r.PushedAt.Format("2006-01-02"))
+	}
+	return b.String()
+}
+
+func affiliationFilterLabel(a AffiliationFilter) string {
+	switch a {
+	case AffiliationFilterOwner:
+		return "owner"
+	case AffiliationFilterMember:
+		return "member"
+	case AffiliationFilterCollaborator:
+		return "collaborator"
+	case AffiliationFilterNone:
+		return "none"
+	default:
+		return "any"
+	}
+}
+
+func triStateLabel(t TriState) string {
+	switch t {
+	case TriShow:
+		return "show"
+	case TriOnly:
+		return "only"
+	default:
+		return "hide"
+	}
+}
+
+func visibilityFilterLabel(v VisibilityFilter) string {
+	switch v {
+	case VisibilityFilterPublic:
+		return "public"
+	case VisibilityFilterPrivate:
+		return "private"
+	case VisibilityFilterInternal:
+		return "internal"
+	default:
+		return "all"
+	}
+}
+
+func sortModeLabel(s SortMode) string {
+	if s == SortByActivity {
+		return "activity"
+	}
+	return "name"
 }

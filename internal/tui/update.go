@@ -12,6 +12,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleOrgPage(msg)
 	case orgsFatalErrMsg:
 		return m.handleOrgsFatalErr(msg)
+	case repoListMsg:
+		return m.handleRepoList(msg)
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -26,23 +28,135 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleBrowseKey is deliberately minimal in this slice: the filter box is
-// always-focused text editing (printable runes append, backspace edits) plus quit.
-// Every other verb — navigation, selection, facets, sort, host switch, help — is
-// added by later slices of this PRD, each of which extends this switch rather than
-// replacing it.
+// handleBrowseKey dispatches by key type first (verbs that exist regardless of
+// focus), then by focus for anything pane-specific. Every verb here lives on a key
+// ADR-0006 permits — see filter.go's cycle helpers and repos.go's descend/backToOrgs
+// for what each one does.
 func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
-	case tea.KeyBackspace:
-		if len(m.orgFilter) > 0 {
-			m.orgFilter = m.orgFilter[:len(m.orgFilter)-1]
+	case tea.KeyUp, tea.KeyCtrlP:
+		return m.moveCursor(-1), nil
+	case tea.KeyDown, tea.KeyCtrlN:
+		return m.moveCursor(1), nil
+	case tea.KeyEnter:
+		return m.handleEnter()
+	case tea.KeyEsc:
+		return m.handleEsc(), nil
+	case tea.KeyCtrlT:
+		return m.cycleFirstFacet(), nil
+	case tea.KeyCtrlF:
+		if m.focus == FocusRepos {
+			m.forkFilter = nextTriState(m.forkFilter)
 		}
 		return m, nil
+	case tea.KeyCtrlV:
+		if m.focus == FocusRepos {
+			m.visibility = nextVisibilityFilter(m.visibility)
+		}
+		return m, nil
+	case tea.KeyCtrlS:
+		return m.cycleSort(), nil
+	case tea.KeyBackspace:
+		return m.editFilter(func(s string) string {
+			if len(s) == 0 {
+				return s
+			}
+			return s[:len(s)-1]
+		}), nil
 	case tea.KeyRunes:
-		m.orgFilter += string(msg.Runes)
+		text := string(msg.Runes)
+		return m.editFilter(func(s string) string { return s + text }), nil
+	}
+	return m, nil
+}
+
+func (m Model) editFilter(edit func(string) string) Model {
+	switch m.focus {
+	case FocusOrgs:
+		m.orgFilter = edit(m.orgFilter)
+		m.orgCursor = 0
+	case FocusRepos:
+		m.repoFilter = edit(m.repoFilter)
+		m.repoCursor = 0
+	}
+	return m
+}
+
+func (m Model) moveCursor(delta int) Model {
+	switch m.focus {
+	case FocusOrgs:
+		n := len(filterOrgsByAffiliation(m.orgs, m.orgFilter, m.orgAffiliation))
+		m.orgCursor = clampCursor(m.orgCursor+delta, n)
+	case FocusRepos:
+		n := len(filterRepos(m.repos, m.repoFilter, m.archivedFilter, m.forkFilter, m.visibility))
+		m.repoCursor = clampCursor(m.repoCursor+delta, n)
+	}
+	return m
+}
+
+func clampCursor(c, n int) int {
+	if n == 0 {
+		return 0
+	}
+	if c < 0 {
+		return 0
+	}
+	if c >= n {
+		return n - 1
+	}
+	return c
+}
+
+func (m Model) handleEnter() (Model, tea.Cmd) {
+	switch m.focus {
+	case FocusOrgs:
+		return m.descend()
+	case FocusRepos:
+		// Opening the clone dialog on a non-empty Selection is added in a later
+		// slice of this PRD (#27 introduces Selection; #31 introduces the dialog).
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m Model) handleEsc() Model {
+	switch m.focus {
+	case FocusRepos:
+		return m.backToOrgs()
+	case FocusOrgs:
+		if m.orgFilter != "" {
+			m.orgFilter = ""
+			m.orgCursor = 0
+		}
+		return m
+	}
+	return m
+}
+
+// cycleFirstFacet is ^t: the Org pane has only one cyclable facet (Affiliation), so
+// it gets the first facet key; the Repo pane's first facet is archived. Reusing one
+// key contextually, rather than reserving a second ctrl binding, since DESIGN.md's
+// keymap does not name a separate key for the Org pane's Affiliation cycle.
+func (m Model) cycleFirstFacet() Model {
+	switch m.focus {
+	case FocusOrgs:
+		m.orgAffiliation = nextAffiliationFilter(m.orgAffiliation)
+		m.orgCursor = 0
+	case FocusRepos:
+		m.archivedFilter = nextTriState(m.archivedFilter)
+		m.repoCursor = 0
+	}
+	return m
+}
+
+func (m Model) cycleSort() Model {
+	switch m.focus {
+	case FocusOrgs:
+		m.orgSort = nextSortMode(m.orgSort) // no visible effect — see model.go
+	case FocusRepos:
+		m.repoSort = nextSortMode(m.repoSort)
+	}
+	return m
 }
