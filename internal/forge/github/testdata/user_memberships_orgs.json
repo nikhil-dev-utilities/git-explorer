@@ -1,0 +1,10 @@
+[
+  {
+    "organization": { "login": "acme" },
+    "role": "admin"
+  },
+  {
+    "organization": { "login": "widgets-inc" },
+    "role": "member"
+  }
+]
