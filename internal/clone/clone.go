@@ -7,9 +7,11 @@ package clone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Repo is the minimal input this package needs — deliberately decoupled from
@@ -58,14 +60,16 @@ func TargetPath(target string, repo Repo, orgSubdir bool) string {
 }
 
 // Classify determines what will happen to repo if cloned to target, and the
-// destination path that decision is about.
+// destination path that decision is about: Cloned (the path is absent), Skipped (the
+// path holds a git repository whose origin remote identifies this same Repo — left
+// entirely untouched), or Conflict (the path is occupied by anything else). A Clone
+// Run must never write into a Conflict path, under any circumstance.
 //
-// This slice only implements the fresh-path case: an absent destination always
-// classifies Cloned. Recognizing an existing clone of the same Repo as Skipped, or
-// anything else at the path as Conflict, is a later slice of this PRD (#18) — calling
-// Classify against an already-occupied path returns an error rather than a wrong
-// Outcome in the meantime.
-func Classify(target string, repo Repo, orgSubdir bool) (Outcome, string, error) {
+// The Skipped comparison is protocol-normalized: the existing origin and repo.CloneURL
+// are each parsed into a (host, owner, name) identity and compared as that triple, not
+// as raw strings, so an ssh clone and an https clone of the same Repo are recognized
+// as the same Repo.
+func Classify(ctx context.Context, target string, repo Repo, orgSubdir bool) (Outcome, string, error) {
 	dest := TargetPath(target, repo, orgSubdir)
 
 	if _, err := os.Stat(dest); err != nil {
@@ -75,14 +79,30 @@ func Classify(target string, repo Repo, orgSubdir bool) (Outcome, string, error)
 		return 0, "", fmt.Errorf("checking %s: %w", dest, err)
 	}
 
-	return 0, "", fmt.Errorf("clone: classifying an existing path at %s is not implemented yet", dest)
+	res, err := runGit(ctx, "-C", dest, "remote", "get-url", "origin")
+	if err != nil {
+		if errors.Is(err, ErrGitNotInstalled) {
+			return 0, "", err
+		}
+		// Not a git repository, or a git repository with no origin remote, or any
+		// other git failure: we cannot confirm this is the same Repo, so treat it
+		// as occupied rather than guessing.
+		return OutcomeConflict, dest, nil
+	}
+
+	existing, ok1 := parseCloneURL(strings.TrimSpace(string(res.Stdout)))
+	wanted, ok2 := parseCloneURL(repo.CloneURL)
+	if ok1 && ok2 && existing == wanted {
+		return OutcomeSkipped, dest, nil
+	}
+	return OutcomeConflict, dest, nil
 }
 
 // CloneOne classifies repo against target and, when the Outcome is Cloned, performs
 // the actual `git clone`. It returns the Outcome and destination path regardless of
 // whether a clone was needed.
 func CloneOne(ctx context.Context, target string, repo Repo, orgSubdir bool) (Outcome, string, error) {
-	outcome, dest, err := Classify(target, repo, orgSubdir)
+	outcome, dest, err := Classify(ctx, target, repo, orgSubdir)
 	if err != nil {
 		return outcome, dest, err
 	}
