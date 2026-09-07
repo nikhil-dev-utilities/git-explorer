@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 )
 
 // Repo is the minimal input this package needs — deliberately decoupled from
@@ -109,12 +110,30 @@ func CloneOne(ctx context.Context, target string, repo Repo, orgSubdir bool) (Ou
 	if outcome != OutcomeCloned {
 		return outcome, dest, nil
 	}
-
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return outcome, dest, fmt.Errorf("creating parent directory for %s: %w", dest, err)
-	}
-	if _, err := runGit(ctx, "clone", "--origin", "origin", repo.CloneURL, dest); err != nil {
+	if err := performClone(ctx, repo.CloneURL, dest); err != nil {
 		return outcome, dest, err
 	}
 	return outcome, dest, nil
 }
+
+// performClone is the actual `git clone` step, shared by CloneOne and Run so the two
+// never duplicate — or drift apart on — how a clone is actually executed.
+func performClone(ctx context.Context, cloneURL, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return fmt.Errorf("creating parent directory for %s: %w", dest, err)
+	}
+
+	atomic.AddInt64(&activeClones, 1)
+	defer atomic.AddInt64(&activeClones, -1)
+
+	if _, err := runGit(ctx, "clone", "--origin", "origin", cloneURL, dest); err != nil {
+		return err
+	}
+	return nil
+}
+
+// activeClones counts git clone subprocesses currently in flight. It exists so Run's
+// parallelism bound can be verified by a test against real git — a counting wrapper
+// around the exec calls, per this PRD's testing decisions — rather than by mocking
+// git or asserting on wall-clock timing.
+var activeClones int64
