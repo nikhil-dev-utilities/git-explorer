@@ -2,16 +2,44 @@ package github
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
+// orgsJSON builds the JSON body the organizations endpoint would return for the given
+// Org names — used instead of a static testdata file so pagination tests can build a
+// page of any size (including a full orgsPerPage page) without hand-writing large
+// fixtures.
+func orgsJSON(t *testing.T, names []string) []byte {
+	t.Helper()
+	entries := make([]map[string]string, len(names))
+	for i, n := range names {
+		entries[i] = map[string]string{"login": n}
+	}
+	data, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatalf("marshaling org fixture: %v", err)
+	}
+	return data
+}
+
+func namesN(prefix string, n int) []string {
+	names := make([]string, n)
+	for i := range names {
+		names[i] = fmt.Sprintf("%s-%d", prefix, i)
+	}
+	return names
+}
+
 func registerPrivateHostFixtures(t *testing.T, fr *fakeRunner, hostName string) {
 	t.Helper()
 	fr.on(
-		[]string{"api", "--hostname", hostName, "organizations", "-f", "per_page=100"},
+		[]string{"api", "--hostname", hostName, "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{Stdout: readFixture(t, "organizations.json"), ExitCode: 0},
 	)
 	fr.on(
@@ -24,16 +52,32 @@ func registerPrivateHostFixtures(t *testing.T, fr *fakeRunner, hostName string) 
 	)
 }
 
-func TestListOrgsPrivate_ReturnsEveryOrgBadgedByAffiliation(t *testing.T) {
+// drainOrgs collects every Org from every page of ch, failing the test on the first
+// page-level error.
+func drainOrgs(t *testing.T, ch <-chan forge.OrgPage) []forge.Org {
+	t.Helper()
+	var orgs []forge.Org
+	for page := range ch {
+		if page.Err != nil {
+			t.Fatalf("unexpected page.Err = %v", page.Err)
+		}
+		orgs = append(orgs, page.Orgs...)
+	}
+	return orgs
+}
+
+func TestAdapter_ListOrgs_PrivateHost_ReturnsEveryOrgBadgedByAffiliation(t *testing.T) {
 	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
 	fr := newFakeRunner()
+	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
 	registerPrivateHostFixtures(t, fr, "ghe.corp.internal")
 
 	a := newWithRunner(fr)
-	orgs, err := a.listOrgsPrivate(context.Background(), host)
+	ch, err := a.ListOrgs(context.Background(), host)
 	if err != nil {
-		t.Fatalf("listOrgsPrivate() error = %v", err)
+		t.Fatalf("ListOrgs() error = %v", err)
 	}
+	orgs := drainOrgs(t, ch)
 
 	// organizations.json lists acme, widgets-inc, globex, initech — all four must be
 	// present, including initech (which appears in neither membership nor
@@ -59,28 +103,7 @@ func TestListOrgsPrivate_ReturnsEveryOrgBadgedByAffiliation(t *testing.T) {
 	}
 }
 
-func TestListOrgsPrivate_DoesNotFetchRepos(t *testing.T) {
-	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
-	fr := newFakeRunner()
-	registerPrivateHostFixtures(t, fr, "ghe.corp.internal")
-
-	a := newWithRunner(fr)
-	if _, err := a.listOrgsPrivate(context.Background(), host); err != nil {
-		t.Fatalf("listOrgsPrivate() error = %v", err)
-	}
-
-	// "user/repos" is the legitimate collaborator probe; what must never appear is a
-	// per-Org repos listing, e.g. "orgs/acme/repos" (the ListRepos endpoint).
-	for _, call := range fr.calls {
-		for _, arg := range call {
-			if arg != "user/repos" && strings.HasSuffix(arg, "/repos") {
-				t.Fatalf("listOrgsPrivate fetched an Org's repos, want it to stay lazy: %v", call)
-			}
-		}
-	}
-}
-
-func TestAdapter_ListOrgs_DispatchesToPrivateHostPath(t *testing.T) {
+func TestAdapter_ListOrgs_PrivateHost_DoesNotFetchRepos(t *testing.T) {
 	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
 	fr := newFakeRunner()
 	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
@@ -91,15 +114,216 @@ func TestAdapter_ListOrgs_DispatchesToPrivateHostPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListOrgs() error = %v", err)
 	}
+	drainOrgs(t, ch)
 
-	var orgs []forge.Org
+	// "user/repos" is the legitimate collaborator probe; what must never appear is a
+	// per-Org repos listing, e.g. "orgs/acme/repos" (the ListRepos endpoint).
+	for _, call := range fr.snapshotCalls() {
+		for _, arg := range call {
+			if arg != "user/repos" && strings.HasSuffix(arg, "/repos") {
+				t.Fatalf("fetched an Org's repos, want listing Orgs to stay lazy: %v", call)
+			}
+		}
+	}
+}
+
+func TestStreamOrgsPrivate_PaginatesUntilAShortPage(t *testing.T) {
+	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
+	page1Names := namesN("org", orgsPerPage) // a full page: more must be requested
+	page2Names := []string{"org-last-a", "org-last-b"}
+
+	fr := newFakeRunner()
+	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/memberships/orgs", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "organizations", "-f", "page=2", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page2Names), ExitCode: 0})
+
+	a := newWithRunner(fr)
+	ch, err := a.ListOrgs(context.Background(), host)
+	if err != nil {
+		t.Fatalf("ListOrgs() error = %v", err)
+	}
+
+	var pages [][]forge.Org
 	for page := range ch {
 		if page.Err != nil {
-			t.Fatalf("page.Err = %v, want nil", page.Err)
+			t.Fatalf("unexpected page.Err = %v", page.Err)
 		}
-		orgs = append(orgs, page.Orgs...)
+		pages = append(pages, page.Orgs)
 	}
-	if len(orgs) != 4 {
-		t.Fatalf("got %d orgs, want 4 (the full instance listing): %+v", len(orgs), orgs)
+
+	if len(pages) != 2 {
+		t.Fatalf("got %d pages, want exactly 2 (a full page then a short one)", len(pages))
+	}
+	if len(pages[0]) != orgsPerPage {
+		t.Fatalf("page 1 has %d orgs, want %d", len(pages[0]), orgsPerPage)
+	}
+	if len(pages[1]) != len(page2Names) {
+		t.Fatalf("page 2 has %d orgs, want %d", len(pages[1]), len(page2Names))
+	}
+	if pages[0][0].Name != "org-0" {
+		t.Fatalf("page 1 does not contain page 1's data (got %q first)", pages[0][0].Name)
+	}
+	if pages[1][0].Name != "org-last-a" {
+		t.Fatalf("page 2 does not contain page 2's data (got %q first)", pages[1][0].Name)
+	}
+}
+
+func TestStreamOrgsPrivate_ObservesEarlyPageBeforeLaterPageRequested(t *testing.T) {
+	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
+	page1Names := namesN("org", orgsPerPage)
+	release := make(chan struct{})
+
+	fr := newFakeRunner()
+	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/memberships/orgs", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
+	// page 2's call is gated: it will not be recorded in fr.calls, nor return, until
+	// this test explicitly closes `release` — proving deterministically (not by
+	// timing) that it has not been requested yet at the point we check.
+	fr.onGated(
+		[]string{"api", "--hostname", "ghe.corp.internal", "organizations", "-f", "page=2", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, []string{"org-last"}), ExitCode: 0},
+		release,
+	)
+
+	a := newWithRunner(fr)
+	ch, err := a.ListOrgs(context.Background(), host)
+	if err != nil {
+		t.Fatalf("ListOrgs() error = %v", err)
+	}
+
+	page1 := <-ch
+	if page1.Err != nil {
+		t.Fatalf("page1.Err = %v, want nil", page1.Err)
+	}
+	if len(page1.Orgs) != orgsPerPage {
+		t.Fatalf("page1 has %d orgs, want %d", len(page1.Orgs), orgsPerPage)
+	}
+
+	for _, call := range fr.snapshotCalls() {
+		if len(call) > 0 && contains(call, "page=2") {
+			t.Fatal("page 2 was requested before the test released it")
+		}
+	}
+
+	close(release)
+
+	page2 := <-ch
+	if page2.Err != nil {
+		t.Fatalf("page2.Err = %v, want nil", page2.Err)
+	}
+	if len(page2.Orgs) != 1 || page2.Orgs[0].Name != "org-last" {
+		t.Fatalf("page2.Orgs = %+v, want [org-last]", page2.Orgs)
+	}
+
+	if _, ok := <-ch; ok {
+		t.Fatal("channel produced a third page, want it closed after the short page")
+	}
+}
+
+func contains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func TestStreamOrgsPrivate_RateLimitIsTransientWithRetryAfter(t *testing.T) {
+	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
+	fr := newFakeRunner()
+	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/memberships/orgs", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{
+			Stderr:   []byte("gh: API rate limit exceeded for user ID 123. (HTTP 403)\nRetry-After: 45"),
+			ExitCode: 1,
+		})
+
+	a := newWithRunner(fr)
+	ch, err := a.ListOrgs(context.Background(), host)
+	if err != nil {
+		t.Fatalf("ListOrgs() error = %v", err)
+	}
+
+	var pages []forge.OrgPage
+	for page := range ch {
+		pages = append(pages, page)
+	}
+	if len(pages) != 1 {
+		t.Fatalf("got %d pages, want exactly 1 (the rate-limit failure)", len(pages))
+	}
+	if pages[0].Err == nil {
+		t.Fatal("pages[0].Err = nil, want the rate-limit error")
+	}
+	fe, ok := pages[0].Err.(*forge.Error)
+	if !ok {
+		t.Fatalf("Err = %v (%T), want a *forge.Error", pages[0].Err, pages[0].Err)
+	}
+	if fe.Kind != forge.ErrKindTransient {
+		t.Fatalf("Kind = %v, want ErrKindTransient", fe.Kind)
+	}
+	if fe.RetryAfter != 45*time.Second {
+		t.Fatalf("RetryAfter = %v, want 45s", fe.RetryAfter)
+	}
+}
+
+func TestStreamOrgsPrivate_LaterPageFailurePreservesEarlierPages(t *testing.T) {
+	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
+	page1Names := namesN("org", orgsPerPage)
+
+	fr := newFakeRunner()
+	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/memberships/orgs", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+		runResult{Stdout: []byte(`[]`), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "organizations", "-f", "page=2", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stderr: []byte("HTTP 500: internal error"), ExitCode: 1})
+
+	a := newWithRunner(fr)
+	ch, err := a.ListOrgs(context.Background(), host)
+	if err != nil {
+		t.Fatalf("ListOrgs() error = %v", err)
+	}
+
+	page1 := <-ch
+	if page1.Err != nil {
+		t.Fatalf("page1.Err = %v, want nil", page1.Err)
+	}
+	if len(page1.Orgs) != orgsPerPage {
+		t.Fatalf("page1 has %d orgs, want %d — it must survive the later failure intact", len(page1.Orgs), orgsPerPage)
+	}
+
+	page2 := <-ch
+	if page2.Err == nil {
+		t.Fatal("page2.Err = nil, want the page-2 failure")
+	}
+	fe, ok := page2.Err.(*forge.Error)
+	if !ok {
+		t.Fatalf("Err = %v (%T), want a *forge.Error", page2.Err, page2.Err)
+	}
+	if fe.Kind != forge.ErrKindPaneScoped {
+		t.Fatalf("Kind = %v, want ErrKindPaneScoped", fe.Kind)
+	}
+
+	if _, ok := <-ch; ok {
+		t.Fatal("channel produced a third value, want it closed after the failure")
 	}
 }

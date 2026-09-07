@@ -11,21 +11,23 @@ import (
 // then dispatches by Host kind per ADR-0002: the two paths genuinely diverge, not just
 // in parameters.
 //
-// The result is always delivered as a single page for now. Real progressive, multi-page
-// delivery is a later slice; ListOrgs already has its final streaming signature so that
-// slice is additive rather than an interface break.
+// The Public Host path is small and bounded (the user's own memberships plus a
+// collaborator probe), so it's fetched synchronously and delivered as a single page.
+// The Private Host path can enumerate an entire instance, so it streams: a goroutine
+// paginates in the background and the caller can read pages as they arrive rather than
+// waiting for the whole thing.
 func (a *Adapter) ListOrgs(ctx context.Context, host forge.Host) (<-chan forge.OrgPage, error) {
 	if err := a.checkAuth(ctx, host); err != nil {
 		return nil, err
 	}
 
-	var orgs []forge.Org
-	var err error
 	if host.Kind == forge.HostPrivate {
-		orgs, err = a.listOrgsPrivate(ctx, host)
-	} else {
-		orgs, err = a.listOrgsPublic(ctx, host)
+		out := make(chan forge.OrgPage)
+		go a.streamOrgsPrivate(ctx, host, out)
+		return out, nil
 	}
+
+	orgs, err := a.listOrgsPublic(ctx, host)
 	if err != nil {
 		return nil, err
 	}
