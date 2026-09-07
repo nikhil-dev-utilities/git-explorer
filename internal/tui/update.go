@@ -24,6 +24,25 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch m.mode {
 	case ModeBrowse:
 		return m.handleBrowseKey(msg)
+	case ModeLeavePrompt:
+		return m.handleLeavePromptKeyMsg(msg)
+	}
+	return m, nil
+}
+
+// ^c still quits from LeavePrompt — a modal confirmation should never trap the user
+// from the one universal escape hatch, even though its "cancel and go back" action is
+// Esc (stay), not ^c.
+func (m Model) handleLeavePromptKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		return m.handleLeavePromptEsc(), nil
+	case tea.KeyRunes:
+		if len(msg.Runes) == 1 {
+			return m.handleLeavePromptKey(msg.Runes[0]), nil
+		}
 	}
 	return m, nil
 }
@@ -44,6 +63,10 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleEnter()
 	case tea.KeyEsc:
 		return m.handleEsc(), nil
+	case tea.KeyTab:
+		return m.toggleSelected(), nil
+	case tea.KeyCtrlO:
+		return m.selectAllMatching(), nil
 	case tea.KeyCtrlT:
 		return m.cycleFirstFacet(), nil
 	case tea.KeyCtrlF:
@@ -124,7 +147,7 @@ func (m Model) handleEnter() (Model, tea.Cmd) {
 func (m Model) handleEsc() Model {
 	switch m.focus {
 	case FocusRepos:
-		return m.backToOrgs()
+		return m.leaveRepos()
 	case FocusOrgs:
 		if m.orgFilter != "" {
 			m.orgFilter = ""

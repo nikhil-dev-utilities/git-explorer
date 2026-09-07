@@ -9,8 +9,20 @@ func (m Model) View() string {
 	switch m.mode {
 	case ModeBrowse:
 		return m.viewBrowse()
+	case ModeLeavePrompt:
+		return m.viewLeavePrompt()
+	case ModeCloneDialog:
+		// Built out by a later slice of this PRD (#31).
+		return fmt.Sprintf("clone dialog: %d repos selected\n", m.selectionCount())
 	}
 	return ""
+}
+
+func (m Model) viewLeavePrompt() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d repos selected in %s\n\n", m.selectionCount(), m.currentOrg.Name)
+	b.WriteString("[c] clone now  [d] discard  [esc] stay\n")
+	return b.String()
 }
 
 // viewBrowse renders whichever pane has focus. True side-by-side column layout
@@ -61,7 +73,7 @@ func (m Model) viewOrgPane() string {
 func (m Model) viewRepoPane() string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "repos: %s\n", m.currentOrg.Name)
+	fmt.Fprintf(&b, "repos: %s · %d selected\n", m.currentOrg.Name, m.selectionCount())
 	fmt.Fprintf(&b, "%s\n", m.repoFilter)
 	fmt.Fprintf(&b, "archived: %s · fork: %s · visibility: %s · sort: %s\n",
 		triStateLabel(m.archivedFilter), triStateLabel(m.forkFilter),
@@ -91,6 +103,10 @@ func (m Model) viewRepoPane() string {
 		if i == m.repoCursor {
 			cursor = "> "
 		}
+		tick := "[ ]"
+		if m.selected[r.Name] {
+			tick = "[x]"
+		}
 		badges := ""
 		if r.Archived {
 			badges += "archived "
@@ -98,7 +114,7 @@ func (m Model) viewRepoPane() string {
 		if r.Fork {
 			badges += "fork "
 		}
-		fmt.Fprintf(&b, "%s%-30s %s%s\n", cursor, r.Name, badges, r.PushedAt.Format("2006-01-02"))
+		fmt.Fprintf(&b, "%s%s %-30s %s%s\n", cursor, tick, r.Name, badges, r.PushedAt.Format("2006-01-02"))
 	}
 	return b.String()
 }
