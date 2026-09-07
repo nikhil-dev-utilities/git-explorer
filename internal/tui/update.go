@@ -42,6 +42,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleCloneDialogKeyMsg(msg)
 	case ModeCloneRun:
 		return m.handleCloneRunKeyMsg(msg)
+	case ModeHelp:
+		return m.handleHelpKeyMsg(msg)
 	}
 	return m, nil
 }
@@ -167,6 +169,8 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.openHostSwitch(), nil
 	case tea.KeyCtrlR:
 		return m.retry()
+	case tea.KeyF1:
+		return m.openHelp(), nil
 	case tea.KeyBackspace:
 		return m.editFilter(func(s string) string {
 			if len(s) == 0 {
