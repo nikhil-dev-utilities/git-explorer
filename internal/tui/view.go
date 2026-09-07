@@ -14,8 +14,27 @@ func (m Model) View() string {
 	case ModeCloneDialog:
 		// Built out by a later slice of this PRD (#31).
 		return fmt.Sprintf("clone dialog: %d repos selected\n", m.selectionCount())
+	case ModeHostSwitch:
+		return m.viewHostSwitch()
 	}
 	return ""
+}
+
+func (m Model) viewHostSwitch() string {
+	var b strings.Builder
+	b.WriteString("hosts\n\n")
+	for i, h := range m.hosts {
+		cursor := "  "
+		if i == m.hostCursor {
+			cursor = "> "
+		}
+		active := " "
+		if i == m.activeHostIdx {
+			active = "*"
+		}
+		fmt.Fprintf(&b, "%s%s %s\n", cursor, active, h.Name)
+	}
+	return b.String()
 }
 
 func (m Model) viewLeavePrompt() string {

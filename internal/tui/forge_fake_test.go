@@ -16,6 +16,10 @@ type fakeForge struct {
 	// test observe the Model's state deterministically before any page has arrived,
 	// rather than racing an instantly-resolving fake.
 	orgsGate <-chan struct{}
+	// orgPagesByHost, if set, overrides orgPages on a per-Host-name basis — for
+	// host-switching tests, which need different Orgs to appear after switching.
+	orgPagesByHost map[string][]forge.OrgPage
+	listOrgsCalls  []forge.Host
 
 	repos    map[string][]forge.Repo // keyed by Org name
 	reposErr error
@@ -23,15 +27,20 @@ type fakeForge struct {
 	listReposCalls []forge.Org
 }
 
-func (f *fakeForge) ListOrgs(_ context.Context, _ forge.Host) (<-chan forge.OrgPage, error) {
+func (f *fakeForge) ListOrgs(_ context.Context, host forge.Host) (<-chan forge.OrgPage, error) {
+	f.listOrgsCalls = append(f.listOrgsCalls, host)
 	if f.orgsGate != nil {
 		<-f.orgsGate
 	}
 	if f.orgsErr != nil {
 		return nil, f.orgsErr
 	}
-	ch := make(chan forge.OrgPage, len(f.orgPages))
-	for _, p := range f.orgPages {
+	pages := f.orgPages
+	if f.orgPagesByHost != nil {
+		pages = f.orgPagesByHost[host.Name]
+	}
+	ch := make(chan forge.OrgPage, len(pages))
+	for _, p := range pages {
 		ch <- p
 	}
 	close(ch)
