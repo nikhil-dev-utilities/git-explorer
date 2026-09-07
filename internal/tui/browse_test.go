@@ -29,7 +29,7 @@ func newTestModel(t *testing.T, f *fakeForge, hosts ...forge.Host) *teatest.Test
 	if len(hosts) == 0 {
 		hosts = []forge.Host{{Name: "github.com"}}
 	}
-	m := New(f, hosts, noopClonePreview, "")
+	m := New(f, hosts, noopClonePreview, noopCloneRunner, "", 8)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
 	t.Cleanup(func() {
 		_ = tm.Quit()

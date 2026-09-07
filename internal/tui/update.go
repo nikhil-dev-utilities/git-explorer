@@ -16,6 +16,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleRepoList(msg)
 	case clonePreviewMsg:
 		return m.handleClonePreview(msg)
+	case cloneRunResultMsg:
+		return m.handleCloneRunResult(msg)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -38,6 +40,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleFatalKeyMsg(msg)
 	case ModeCloneDialog:
 		return m.handleCloneDialogKeyMsg(msg)
+	case ModeCloneRun:
+		return m.handleCloneRunKeyMsg(msg)
 	}
 	return m, nil
 }
@@ -50,6 +54,32 @@ func (m Model) handleCloneDialogKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.leaveCloneDialog(), nil
 	case tea.KeyTab:
 		return m.toggleOrgSubdir()
+	case tea.KeyEnter:
+		return m.confirmCloneDialog()
+	}
+	return m, nil
+}
+
+// ^c means something different depending on whether a run is actually in flight: it
+// cancels the run (the safer read of a stray ^c mid-clone — you can always retry, but
+// nuking the whole session is much worse), and only reverts to the ordinary
+// quit-the-app binding once the summary is showing.
+func (m Model) handleCloneRunKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if m.cloneRunInFlight {
+		if msg.Type == tea.KeyCtrlC {
+			return m.cancelCloneRun(), nil
+		}
+		return m, nil
+	}
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		return m.leaveCloneRunSummary(), nil
+	case tea.KeyRunes:
+		if len(msg.Runes) == 1 && msg.Runes[0] == 'r' {
+			return m.retryFailures()
+		}
 	}
 	return m, nil
 }

@@ -130,7 +130,7 @@ func TestEmptyStates_AreVisiblyDistinct(t *testing.T) {
 	// exactly the "nothing has arrived yet" state — no need to actually run the
 	// program to observe it.
 	loadingForge := &fakeForge{orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}}}
-	loadingModel := New(loadingForge, []forge.Host{{Name: "github.com"}}, noopClonePreview, "")
+	loadingModel := New(loadingForge, []forge.Host{{Name: "github.com"}}, noopClonePreview, noopCloneRunner, "", 8)
 	loadingView := loadingModel.View()
 
 	// no orgs at all, load complete.

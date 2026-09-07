@@ -26,9 +26,12 @@ const (
 	// ModeLeavePrompt guards a non-empty Selection (ADR-0005): entered instead of
 	// completing a navigation away from the Repo pane. clone now / discard / stay.
 	ModeLeavePrompt
-	// ModeCloneDialog is built out by a later slice of this PRD (#31); the mode
-	// exists now so LeavePrompt's "clone now" choice has somewhere real to go.
+	// ModeCloneDialog previews the destination and pre-flight Outcome for every
+	// Repo in the current Selection.
 	ModeCloneDialog
+	// ModeCloneRun is modal (ADR-0005): exactly one run in flight at a time, pane
+	// navigation blocked until it finishes or is cancelled.
+	ModeCloneRun
 	// ModeHostSwitch lists every configured Host, letting the user pick a new
 	// active one without restarting the app.
 	ModeHostSwitch
@@ -156,6 +159,14 @@ type Model struct {
 	cloneTarget         string
 	cloneOrgSubdir      bool // always starts false — never remembered, per ADR-0007
 	clonePreviewResults []clone.Result
+
+	// cloneRun executes a confirmed Clone Run. Per ADR-0005 exactly one is ever in
+	// flight; cloneRunCancel is non-nil only while cloneRunInFlight is true.
+	cloneRun         CloneRunnerFunc
+	cloneParallelism int
+	cloneRunInFlight bool
+	cloneRunCancel   context.CancelFunc
+	cloneRunResults  []clone.Result
 }
 
 func (m Model) selectionCount() int {
@@ -168,22 +179,26 @@ func (m Model) selectionCount() int {
 	return n
 }
 
-// New constructs a Model. f and preview are injected so this package's tests never
-// depend on a real Forge or touch the filesystem/git. hosts must be non-empty; the
-// first is active at launch. target pre-fills the clone dialog (from Config's
-// clone.default_target — empty is valid and means the dialog opens with no default,
-// exactly as DESIGN.md's zero-config case describes); it is never written back to
-// anything, only ever read.
-func New(f forge.Forge, hosts []forge.Host, preview ClonePreviewFunc, target string) Model {
+// New constructs a Model. f, preview, and runner are injected so this package's
+// tests never depend on a real Forge or touch the filesystem/git. hosts must be
+// non-empty; the first is active at launch. target pre-fills the clone dialog (from
+// Config's clone.default_target — empty is valid and means the dialog opens with no
+// default, exactly as DESIGN.md's zero-config case describes); it is never written
+// back to anything, only ever read. parallelism bounds a Clone Run (Config's
+// clone.parallelism); values below 1 are clone.Run's own concern, not this
+// package's — it passes parallelism through unmodified.
+func New(f forge.Forge, hosts []forge.Host, preview ClonePreviewFunc, runner CloneRunnerFunc, target string, parallelism int) Model {
 	if len(hosts) == 0 {
 		panic("tui.New: hosts must be non-empty")
 	}
 	return Model{
-		forge:        f,
-		hosts:        hosts,
-		mode:         ModeBrowse,
-		clonePreview: preview,
-		cloneTarget:  target,
+		forge:            f,
+		hosts:            hosts,
+		mode:             ModeBrowse,
+		clonePreview:     preview,
+		cloneTarget:      target,
+		cloneRun:         runner,
+		cloneParallelism: parallelism,
 	}
 }
 
