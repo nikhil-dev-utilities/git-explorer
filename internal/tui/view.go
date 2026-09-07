@@ -24,6 +24,8 @@ func (m Model) View() string {
 		return m.viewHostSwitch()
 	case ModeFatal:
 		return m.viewFatal()
+	case ModeHelp:
+		return m.viewHelp()
 	}
 	return ""
 }
@@ -38,6 +40,26 @@ func (m Model) viewFatal() string {
 		fmt.Fprintf(&b, "%v\n\n", m.fatalErr)
 	}
 	b.WriteString("[^y] switch host  [^c] quit\n")
+	return b.String()
+}
+
+// viewHelp lists every binding straight from keymapTable — the same table the
+// regression test in keymap_test.go checks — grouped by mode, so this listing can
+// never show something the test didn't also verify.
+func (m Model) viewHelp() string {
+	var b strings.Builder
+	b.WriteString("help\n\n")
+
+	currentSection := ""
+	for _, kb := range keymapTable {
+		if kb.mode != currentSection {
+			currentSection = kb.mode
+			fmt.Fprintf(&b, "%s\n", currentSection)
+		}
+		fmt.Fprintf(&b, "  %-14s %s\n", kb.key, kb.action)
+	}
+
+	b.WriteString("\n[esc] close\n")
 	return b.String()
 }
 

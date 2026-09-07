@@ -38,6 +38,8 @@ const (
 	// ModeFatal takes over the whole screen: nothing else in the app works until
 	// it's fixed (not authenticated, gh/git missing), so nothing else is shown.
 	ModeFatal
+	// ModeHelp lists every binding from keymapTable — reachable from Browse only.
+	ModeHelp
 )
 
 // Focus is which of the two Browse-mode panes is currently receiving key input.
