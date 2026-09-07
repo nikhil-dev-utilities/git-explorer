@@ -1,0 +1,20 @@
+# Maintains an always-current release PR with the computed next version and a
+# generated CHANGELOG (per release-please-config.json / .release-please-manifest.json).
+# Merging that PR creates a version tag, which release.yml picks up to run GoReleaser.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

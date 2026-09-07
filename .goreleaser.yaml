@@ -1,0 +1,34 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: git-explorer
+    main: ./cmd/git-explorer
+    binary: git-explorer
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: "checksums.txt"
+
+# release-please already generates and owns the CHANGELOG from Conventional Commits;
+# GoReleaser must not produce a second, competing one.
+changelog:
+  disable: true
