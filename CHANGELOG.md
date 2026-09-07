@@ -1,0 +1,39 @@
+# Changelog
+
+## 0.1.0 (2026-09-07)
+
+
+### Features
+
+* **clone:** batch Run — bounded parallelism, never aborts on failure ([#23](https://github.com/nikhil-dev-utilities/git-explorer/issues/23)) ([303b93b](https://github.com/nikhil-dev-utilities/git-explorer/commit/303b93bce42263729ee883e5898f3bd43f9588f6)), closes [#19](https://github.com/nikhil-dev-utilities/git-explorer/issues/19)
+* **clone:** cancellation — stop dispatch, terminate in-flight, keep results ([#24](https://github.com/nikhil-dev-utilities/git-explorer/issues/24)) ([aa6d04b](https://github.com/nikhil-dev-utilities/git-explorer/commit/aa6d04b264fbc930b48ae7575b2c8f5dbcbd0995)), closes [#20](https://github.com/nikhil-dev-utilities/git-explorer/issues/20)
+* **clone:** classify + clone the happy path for one Repo ([#21](https://github.com/nikhil-dev-utilities/git-explorer/issues/21)) ([95468b8](https://github.com/nikhil-dev-utilities/git-explorer/commit/95468b80c7906c93fbff02ae31bba14a6d0a4ef4)), closes [#17](https://github.com/nikhil-dev-utilities/git-explorer/issues/17)
+* **clone:** classify Skipped (protocol-normalized) and Conflict ([#22](https://github.com/nikhil-dev-utilities/git-explorer/issues/22)) ([bb2a0c7](https://github.com/nikhil-dev-utilities/git-explorer/commit/bb2a0c77109868f40b66dff211b54a08990a1b93)), closes [#18](https://github.com/nikhil-dev-utilities/git-explorer/issues/18)
+* **cmd:** add composition root wiring Forge, Config, and Clone into the TUI ([#50](https://github.com/nikhil-dev-utilities/git-explorer/issues/50)) ([270a177](https://github.com/nikhil-dev-utilities/git-explorer/commit/270a177e0493eaa4af727879939ff85ffb3e1516)), closes [#45](https://github.com/nikhil-dev-utilities/git-explorer/issues/45)
+* **config:** add Config schema and Load() core with zero-config defaults ([#13](https://github.com/nikhil-dev-utilities/git-explorer/issues/13)) ([2c4c368](https://github.com/nikhil-dev-utilities/git-explorer/commit/2c4c3689133a0321d97d7f89b50cafb57c89ee45))
+* **config:** logging bootstrap — slog + lumberjack, off-level no-op ([#16](https://github.com/nikhil-dev-utilities/git-explorer/issues/16)) ([7bf36e1](https://github.com/nikhil-dev-utilities/git-explorer/commit/7bf36e1ae210d4d0dc31066de4158e44df90818c)), closes [#12](https://github.com/nikhil-dev-utilities/git-explorer/issues/12)
+* **config:** resolve per-Host default_target, name the file on parse errors ([#14](https://github.com/nikhil-dev-utilities/git-explorer/issues/14)) ([2693234](https://github.com/nikhil-dev-utilities/git-explorer/commit/2693234e9c4b7ecae32d73e26740c3e30d28f165)), closes [#10](https://github.com/nikhil-dev-utilities/git-explorer/issues/10)
+* **forge/github:** add the command-runner seam ([1a71ea8](https://github.com/nikhil-dev-utilities/git-explorer/commit/1a71ea8dc2ead999d3946d55b6f0ef42605e6270))
+* **forge/github:** check gh authentication before listing ([5bbf196](https://github.com/nikhil-dev-utilities/git-explorer/commit/5bbf19668a33017ad58692307f05928fb3554674))
+* **forge/github:** implement ListRepos and CloneURL ([89f5622](https://github.com/nikhil-dev-utilities/git-explorer/commit/89f5622c074d7932a22f22d5a8c89cbdc224214d)), closes [#8](https://github.com/nikhil-dev-utilities/git-explorer/issues/8)
+* **forge/github:** list Orgs on a Private Host ([caf20e5](https://github.com/nikhil-dev-utilities/git-explorer/commit/caf20e5a8a0e612bda50948ca95645cf87d15389)), closes [#6](https://github.com/nikhil-dev-utilities/git-explorer/issues/6)
+* **forge/github:** list Orgs on a Public Host via member/collaborator union ([a4392b2](https://github.com/nikhil-dev-utilities/git-explorer/commit/a4392b282f5a9be1293050e84aa323796614cdb4))
+* **forge/github:** stream Org pages on a Private Host, classify rate limits ([b21af43](https://github.com/nikhil-dev-utilities/git-explorer/commit/b21af43a644ebd00db5803b955f41ee30e1446e4)), closes [#7](https://github.com/nikhil-dev-utilities/git-explorer/issues/7)
+* **forge/github:** wire ListOrgs to the Public Host path ([575345f](https://github.com/nikhil-dev-utilities/git-explorer/commit/575345f42b7abf25d190bcd0a1153d4338f9dc8f)), closes [#5](https://github.com/nikhil-dev-utilities/git-explorer/issues/5)
+* **forge:** define port types and the Forge interface ([cd79940](https://github.com/nikhil-dev-utilities/git-explorer/commit/cd79940366b5e6ee1f7c754743b8c0ca326f9c52))
+* **tui:** add DESIGN.md's mnemonic alt-key aliases ([#51](https://github.com/nikhil-dev-utilities/git-explorer/issues/51)) ([45162ea](https://github.com/nikhil-dev-utilities/git-explorer/commit/45162ea41f9ddf7971a2bfb87533dcd42500e44f)), closes [#46](https://github.com/nikhil-dev-utilities/git-explorer/issues/46)
+* **tui:** clone dialog — path preview + org-subdirectory toggle ([#40](https://github.com/nikhil-dev-utilities/git-explorer/issues/40)) ([8066f1f](https://github.com/nikhil-dev-utilities/git-explorer/commit/8066f1f75676a217c4d10d326c751e5224ab904a)), closes [#31](https://github.com/nikhil-dev-utilities/git-explorer/issues/31)
+* **tui:** clone run — modal progress + cancel + summary + retry ([#41](https://github.com/nikhil-dev-utilities/git-explorer/issues/41)) ([aeb6411](https://github.com/nikhil-dev-utilities/git-explorer/commit/aeb6411a00377a88742d09d4548d9fd8193e5627)), closes [#32](https://github.com/nikhil-dev-utilities/git-explorer/issues/32)
+* **tui:** descend to Repos — two-pane navigation, filter/facets/sort ([#35](https://github.com/nikhil-dev-utilities/git-explorer/issues/35)) ([eba7729](https://github.com/nikhil-dev-utilities/git-explorer/commit/eba7729f6616587a1096fdcf1f17c53d535bae71)), closes [#26](https://github.com/nikhil-dev-utilities/git-explorer/issues/26)
+* **tui:** failure surfaces — Fatal / pane-scoped / transient, distinct empty states ([#38](https://github.com/nikhil-dev-utilities/git-explorer/issues/38)) ([15ddbd4](https://github.com/nikhil-dev-utilities/git-explorer/commit/15ddbd47ce5000ecbc2e3f0296c94d22a062e25c)), closes [#29](https://github.com/nikhil-dev-utilities/git-explorer/issues/29)
+* **tui:** foundation — Bubble Tea shell, browse Orgs with live filter ([#34](https://github.com/nikhil-dev-utilities/git-explorer/issues/34)) ([6acca17](https://github.com/nikhil-dev-utilities/git-explorer/commit/6acca173fb8b3efee6b8e0777dfd05b682ba7373))
+* **tui:** help screen + keymap regression guard ([#42](https://github.com/nikhil-dev-utilities/git-explorer/issues/42)) ([a2a00ca](https://github.com/nikhil-dev-utilities/git-explorer/commit/a2a00cab387dc97b28a205ce8e4483398ea208b0)), closes [#33](https://github.com/nikhil-dev-utilities/git-explorer/issues/33)
+* **tui:** host switching ([#37](https://github.com/nikhil-dev-utilities/git-explorer/issues/37)) ([39e20c7](https://github.com/nikhil-dev-utilities/git-explorer/commit/39e20c79c7bf2878648518c81e1de6c0e6308411)), closes [#28](https://github.com/nikhil-dev-utilities/git-explorer/issues/28)
+* **tui:** narrow-terminal responsive layout, real two-column composition ([#39](https://github.com/nikhil-dev-utilities/git-explorer/issues/39)) ([a56f0e4](https://github.com/nikhil-dev-utilities/git-explorer/commit/a56f0e44170ef663e30a2680f35a9127a755aba9)), closes [#30](https://github.com/nikhil-dev-utilities/git-explorer/issues/30)
+* **tui:** selection — Tab tick, select-all-matching, LeavePrompt ([#36](https://github.com/nikhil-dev-utilities/git-explorer/issues/36)) ([df63b74](https://github.com/nikhil-dev-utilities/git-explorer/commit/df63b74095678f1e1c68d170f642b6f01fb9a01a)), closes [#27](https://github.com/nikhil-dev-utilities/git-explorer/issues/27)
+
+
+### Bug Fixes
+
+* **forge/github:** stop depending on the real gh binary in runner tests ([f0ce469](https://github.com/nikhil-dev-utilities/git-explorer/commit/f0ce469688dec2f2248212886f46d232eb43d354))
+* **forge:** carry Host on Org ([7111205](https://github.com/nikhil-dev-utilities/git-explorer/commit/7111205054a36cc2bbb2c107310e4f6eaf99bd43))
