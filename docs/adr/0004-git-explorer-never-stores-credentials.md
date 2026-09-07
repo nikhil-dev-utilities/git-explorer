@@ -22,4 +22,8 @@ lines of YAML and cannot break when gh cuts a release.
   `gh`, never from our config. If that ever becomes untenable, this ADR is the thing to
   revisit deliberately — not to work around.
 - No log redaction, file-permission enforcement, or secret-scrubbing in panic handlers is
-  needed, because there is no secret in our process to leak.
+  needed for the *config*, because there is no secret in it.
+- There is exactly one place a secret does transit our process: the stdout of
+  `gh auth token`, which is the credential itself. That command's output is suppressed at
+  the exec boundary and never reaches the log at any level. This is the single line to
+  hold; everything else about the no-secrets property follows from it.

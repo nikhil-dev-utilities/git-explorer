@@ -207,6 +207,11 @@ clone:
   default_target: ~/src          # pre-fills the dialog, always editable
   parallelism: 8
 
+log:
+  path: ~/.local/state/git-explorer/git-explorer.log
+  level: info                    # debug | info | warn | error | off
+  max_size_mb: 5
+
 hosts:
   - name: github.com
     frontdoor: gh-cli
@@ -216,6 +221,37 @@ hosts:
     protocol: https
     default_target: ~/work       # per-Host override
 ```
+
+## Logging
+
+A Bubble Tea program owns stdout and stderr — they are the render surface, and a stray
+write corrupts the display. A file is therefore the *only* diagnostic channel, not a
+convenience. Logging to stderr is refused outright rather than merely discouraged.
+
+**Where.** Neither the binary's directory nor the working directory is an appropriate
+place to write. The default is `$XDG_STATE_HOME/git-explorer/git-explorer.log`, falling
+back to `~/.local/state/git-explorer/` — XDG puts logs under *state*, which is neither
+config (user-owned input) nor cache (safe to delete). Overridden in precedence order:
+
+```
+--log-file <path>  >  GIT_EXPLORER_LOG  >  log.path in config  >  XDG default
+```
+
+**On by default**, at `info`. A user reporting "it hung listing orgs" can attach the file
+without being asked to reproduce under a flag — which, for an intermittent TUI bug, is
+often a dead end. `--log-level=off` disables it entirely.
+
+**Bounded by size**, keeping recent context and dropping the oldest.
+`log/slog` writing to a `lumberjack.Logger` with `MaxSize: 5, MaxBackups: 1,
+Compress: false`. This is rotation rather than in-place trimming, so it costs one extra
+file on disk and buys away a read-rewrite-realign pass over a file that is open for
+append — the only part of this feature with real edge cases. A text handler, not JSON:
+the audience is a human pasting it into an issue.
+
+**Never logged, at any level:** the stdout of `gh auth token`, which *is* the credential.
+ADR-0004 says we hold no secrets; subprocess output is precisely where we could start by
+accident, so that one command's output is suppressed at the exec boundary rather than
+filtered later.
 
 ## Testing
 
