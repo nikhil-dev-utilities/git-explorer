@@ -22,9 +22,14 @@ const testWaitDuration = 2 * time.Second
 // sleep-then-inspect pattern for this reason.
 const settleDelay = 200 * time.Millisecond
 
-func newTestModel(t *testing.T, f *fakeForge) *teatest.TestModel {
+// newTestModel constructs a TestModel with a single default Host, unless hosts is
+// given explicitly (for host-switching tests, which need more than one).
+func newTestModel(t *testing.T, f *fakeForge, hosts ...forge.Host) *teatest.TestModel {
 	t.Helper()
-	m := New(f, forge.Host{Name: "github.com"})
+	if len(hosts) == 0 {
+		hosts = []forge.Host{{Name: "github.com"}}
+	}
+	m := New(f, hosts)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
 	t.Cleanup(func() {
 		_ = tm.Quit()

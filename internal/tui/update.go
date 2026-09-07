@@ -26,6 +26,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.handleBrowseKey(msg)
 	case ModeLeavePrompt:
 		return m.handleLeavePromptKeyMsg(msg)
+	case ModeHostSwitch:
+		return m.handleHostSwitchKeyMsg(msg)
+	}
+	return m, nil
+}
+
+func (m Model) handleHostSwitchKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		return m.cancelHostSwitch(), nil
+	case tea.KeyUp, tea.KeyCtrlP:
+		return m.moveHostCursor(-1), nil
+	case tea.KeyDown, tea.KeyCtrlN:
+		return m.moveHostCursor(1), nil
+	case tea.KeyEnter:
+		return m.confirmHostSwitch()
 	}
 	return m, nil
 }
@@ -81,6 +99,8 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyCtrlS:
 		return m.cycleSort(), nil
+	case tea.KeyCtrlY:
+		return m.openHostSwitch(), nil
 	case tea.KeyBackspace:
 		return m.editFilter(func(s string) string {
 			if len(s) == 0 {

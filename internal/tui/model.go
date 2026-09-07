@@ -28,6 +28,9 @@ const (
 	// ModeCloneDialog is built out by a later slice of this PRD (#31); the mode
 	// exists now so LeavePrompt's "clone now" choice has somewhere real to go.
 	ModeCloneDialog
+	// ModeHostSwitch lists every configured Host, letting the user pick a new
+	// active one without restarting the app.
+	ModeHostSwitch
 )
 
 // Focus is which of the two Browse-mode panes is currently receiving key input.
@@ -84,7 +87,13 @@ const (
 // Model is git-explorer's Bubble Tea model.
 type Model struct {
 	forge forge.Forge
-	host  forge.Host
+	// hosts is every Host declared in the already-resolved Config this Model was
+	// constructed with (internal/tui never loads config itself — see PRD 2). Must
+	// be non-empty; New panics otherwise, since there is always at least the
+	// implicit github.com Host per DESIGN.md's Config section.
+	hosts         []forge.Host
+	activeHostIdx int
+	hostCursor    int // cursor within ModeHostSwitch's listing
 
 	mode  Mode
 	focus Focus
@@ -135,17 +144,25 @@ func (m Model) selectionCount() int {
 }
 
 // New constructs a Model. f is injected so this package's tests never depend on a
-// real Forge implementation.
-func New(f forge.Forge, host forge.Host) Model {
+// real Forge implementation. hosts must be non-empty; the first is active at launch.
+func New(f forge.Forge, hosts []forge.Host) Model {
+	if len(hosts) == 0 {
+		panic("tui.New: hosts must be non-empty")
+	}
 	return Model{
 		forge: f,
-		host:  host,
+		hosts: hosts,
 		mode:  ModeBrowse,
 	}
 }
 
+// activeHost is the Host currently being browsed.
+func (m Model) activeHost() forge.Host {
+	return m.hosts[m.activeHostIdx]
+}
+
 func (m Model) Init() tea.Cmd {
-	return listOrgsCmd(m.forge, m.host)
+	return listOrgsCmd(m.forge, m.activeHost())
 }
 
 // backgroundCtx is used for commands dispatched from Update. A later slice of this
