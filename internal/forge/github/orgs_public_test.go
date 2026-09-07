@@ -36,9 +36,9 @@ func TestListOrgsPublic_UnionsMembershipAndCollaborator(t *testing.T) {
 	}
 
 	want := []forge.Org{
-		{Name: "acme", Affiliation: forge.AffiliationOwner},
-		{Name: "globex", Affiliation: forge.AffiliationCollaborator},
-		{Name: "widgets-inc", Affiliation: forge.AffiliationMember},
+		{Name: "acme", Host: host, Affiliation: forge.AffiliationOwner},
+		{Name: "globex", Host: host, Affiliation: forge.AffiliationCollaborator},
+		{Name: "widgets-inc", Host: host, Affiliation: forge.AffiliationMember},
 	}
 	if len(orgs) != len(want) {
 		t.Fatalf("got %d orgs, want %d: %+v", len(orgs), len(want), orgs)

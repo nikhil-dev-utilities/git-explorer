@@ -51,7 +51,7 @@ func (a *Adapter) streamOrgsPrivate(ctx context.Context, host forge.Host, out ch
 		for i, name := range names {
 			// A name with no entry gets AffiliationNone, the zero value — a normal,
 			// expected, displayed result on a Private Host, not an omission.
-			orgs[i] = forge.Org{Name: name, Affiliation: affiliationByName[name]}
+			orgs[i] = forge.Org{Name: name, Host: host, Affiliation: affiliationByName[name]}
 		}
 		out <- forge.OrgPage{Orgs: orgs}
 

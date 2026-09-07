@@ -53,9 +53,12 @@ func (a Affiliation) String() string {
 	}
 }
 
-// Org is a namespace on a Host that owns Repos.
+// Org is a namespace on a Host that owns Repos. Host is carried on the value (rather
+// than requiring a separate parameter everywhere an Org is used) so that once a caller
+// has an Org from ListOrgs, it has everything ListRepos and CloneURL need.
 type Org struct {
 	Name        string
+	Host        Host
 	Affiliation Affiliation
 }
 

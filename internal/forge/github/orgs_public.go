@@ -32,7 +32,7 @@ func (a *Adapter) listOrgsPublic(ctx context.Context, host forge.Host) ([]forge.
 	}
 	for _, name := range collaboratorOrgs {
 		if _, exists := byName[name]; !exists {
-			byName[name] = forge.Org{Name: name, Affiliation: forge.AffiliationCollaborator}
+			byName[name] = forge.Org{Name: name, Host: host, Affiliation: forge.AffiliationCollaborator}
 		}
 	}
 
@@ -70,7 +70,7 @@ func (a *Adapter) fetchMemberships(ctx context.Context, host forge.Host) ([]forg
 		if e.Role == "admin" {
 			affiliation = forge.AffiliationOwner
 		}
-		orgs = append(orgs, forge.Org{Name: e.Organization.Login, Affiliation: affiliation})
+		orgs = append(orgs, forge.Org{Name: e.Organization.Login, Host: host, Affiliation: affiliation})
 	}
 	return orgs, nil
 }
