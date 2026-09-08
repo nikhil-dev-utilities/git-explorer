@@ -14,7 +14,7 @@ func TestListRepos_MapsAllFields(t *testing.T) {
 	org := forge.Org{Name: "acme", Host: host}
 	fr := newFakeRunner()
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "orgs/acme/repos", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "org_repos.json"), ExitCode: 0},
 	)
 
@@ -57,7 +57,7 @@ func TestListRepos_AllThreeVisibilityValues(t *testing.T) {
 	org := forge.Org{Name: "acme", Host: host}
 	fr := newFakeRunner()
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "orgs/acme/repos", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "org_repos.json"), ExitCode: 0},
 	)
 
@@ -85,11 +85,11 @@ func TestListRepos_StaysLazy(t *testing.T) {
 	fr := newFakeRunner()
 	fr.on([]string{"auth", "token", "--hostname", "github.com"}, runResult{ExitCode: 0})
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "user/memberships/orgs", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "user/memberships/orgs", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "user_memberships_orgs.json"), ExitCode: 0},
 	)
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "user_repos_collaborator.json"), ExitCode: 0},
 	)
 
@@ -114,7 +114,7 @@ func TestListRepos_StaysLazy(t *testing.T) {
 	// Now explicitly "select" the first Org and confirm exactly one repo-listing call
 	// happens, for that Org specifically.
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "orgs/" + orgs[0].Name + "/repos", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/" + orgs[0].Name + "/repos", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0},
 	)
 	if _, err := a.ListRepos(context.Background(), orgs[0]); err != nil {

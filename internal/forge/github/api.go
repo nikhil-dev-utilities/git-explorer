@@ -12,11 +12,18 @@ import (
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
-// runAPI calls `gh api --hostname <host> <endpoint> [extraArgs...]` and returns its raw
-// stdout on success. gh handles authentication for the call internally using its own
-// credential store — this function never sees a token.
+// runAPI calls `gh api --hostname <host> -X GET <endpoint> [extraArgs...]` and returns
+// its raw stdout on success. gh handles authentication for the call internally using
+// its own credential store — this function never sees a token.
+//
+// -X GET is explicit and non-negotiable: gh api defaults to POST whenever any -f/-F
+// flag is present (used throughout this package for pagination/filter params like
+// per_page), and every endpoint this package calls is a read-only listing endpoint
+// with no POST route — silently POSTing to one 404s. Every call in this package goes
+// through this one function, so forcing GET here fixes all of them at once. See
+// https://github.com/nikhil-dev-utilities/git-explorer/issues/57.
 func (a *Adapter) runAPI(ctx context.Context, host forge.Host, endpoint string, extraArgs ...string) ([]byte, error) {
-	args := append([]string{"api", "--hostname", host.Name, endpoint}, extraArgs...)
+	args := append([]string{"api", "--hostname", host.Name, "-X", "GET", endpoint}, extraArgs...)
 
 	res, runErr := a.run.Run(ctx, args...)
 	if runErr != nil {
