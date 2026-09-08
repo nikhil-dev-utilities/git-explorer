@@ -90,6 +90,7 @@ func (m Model) viewHostSwitch() string {
 		}
 		fmt.Fprintf(&b, "%s%s %s\n", cursor, active, h.Name)
 	}
+	b.WriteString("\n[↑/↓] move  [enter] switch  [esc] cancel  [^c] quit\n")
 	return b.String()
 }
 
@@ -180,10 +181,7 @@ func (m Model) viewBrowse() string {
 		// full detail, no column constraint. Only reachable when View() is called
 		// directly without going through a real Bubble Tea Program.
 		pane := lipgloss.JoinHorizontal(lipgloss.Top, m.viewOrgPane(), " ", m.viewRepoPane(repoDetailFull))
-		if status := m.statusLine(); status != "" {
-			return pane + "\n" + status
-		}
-		return pane
+		return m.withBrowseFooter(pane)
 	}
 
 	if m.width < tooNarrowWidth {
@@ -195,10 +193,34 @@ func (m Model) viewBrowse() string {
 	repoCol := lipgloss.NewStyle().Width(repoWidth).Render(m.viewRepoPane(detailForWidth(repoWidth)))
 
 	pane := lipgloss.JoinHorizontal(lipgloss.Top, orgCol, " ", repoCol)
+	return m.withBrowseFooter(pane)
+}
+
+// withBrowseFooter appends the persistent footer DESIGN.md's own mockup shows below
+// the panes — active Host, Selection count, and the handful of keys someone actually
+// needs in the moment (never the full keymap; F1 already opens that) — followed by
+// the transient status line, if any. This is the one place in Browse mode a user gets
+// any on-screen hint of what to press, so it's never conditional on anything: it's
+// there on the very first frame and every frame after.
+func (m Model) withBrowseFooter(pane string) string {
+	var b strings.Builder
+	b.WriteString(pane)
+	b.WriteString("\n")
+	b.WriteString(m.browseFooter())
 	if status := m.statusLine(); status != "" {
-		return pane + "\n" + status
+		b.WriteString("\n")
+		b.WriteString(status)
 	}
-	return pane
+	return b.String()
+}
+
+func (m Model) browseFooter() string {
+	enterHint := "enter descend"
+	if m.focus == FocusRepos {
+		enterHint = "enter clone"
+	}
+	return fmt.Sprintf(" host: %s · %d selected · ^y host · %s · F1 help",
+		m.activeHost().Name, m.selectionCount(), enterHint)
 }
 
 func (m Model) viewOrgPane() string {
