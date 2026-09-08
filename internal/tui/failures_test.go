@@ -38,6 +38,73 @@ func TestFatal_HostSwitchEscapeHatchWorks(t *testing.T) {
 	}
 }
 
+// When hosts came from composition-root discovery (or its last-resort implicit
+// default) rather than the user's own config, a Fatal "not authenticated" failure
+// is gentler: pane-scoped with retry, not a full-screen dead end. See
+// hostsUserConfigured's doc comment on Model.
+
+func TestDiscoveredHosts_NotAuthenticatedDowngradesToPaneScoped(t *testing.T) {
+	f := &fakeForge{orgsErr: &forge.Error{Kind: forge.ErrKindFatal, Message: "not authenticated for github.com. Run: gh auth login --hostname github.com"}}
+	tm := newTestModelWithDiscoveredHosts(t, f)
+	m := finalModelAfter(t, tm)
+
+	if m.mode != ModeBrowse {
+		t.Fatalf("mode = %v, want ModeBrowse — an undiscovered-auth failure must not take over the screen", m.mode)
+	}
+	if m.orgsErr == nil {
+		t.Fatal("orgsErr = nil, want the downgraded error recorded for inline pane-scoped display")
+	}
+	view := m.View()
+	// A single word, not a phrase — the bordered pane word-wraps at its width, so a
+	// multi-word phrase can legitimately split across lines here.
+	if !strings.Contains(view, "authenticated") {
+		t.Errorf("View() = %q, want the auth message rendered inline", view)
+	}
+	if !strings.Contains(view, "retry") {
+		t.Errorf("View() = %q, want a retry hint", view)
+	}
+}
+
+func TestDiscoveredHosts_RetryReRunsAuthCheckAgainstTheSameHost(t *testing.T) {
+	// Both calls set up front (no runtime mutation of shared fake state, which
+	// would race against the fake's own goroutine reading it): the first call's
+	// page carries a Fatal Err — equivalent to a synchronous ListOrgs error per
+	// forge.OrgPage's own documented contract — simulating the state before `gh
+	// auth login`; the second (the retry) simulates having completed it since.
+	f := &fakeForge{
+		orgPagesSequence: [][]forge.OrgPage{
+			{{Err: &forge.Error{Kind: forge.ErrKindFatal, Message: "not authenticated"}}},
+			{{Orgs: []forge.Org{{Name: "acme"}}}},
+		},
+	}
+	tm := newTestModelWithDiscoveredHosts(t, f)
+	time.Sleep(settleDelay)
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlR})
+	m := finalModelAfter(t, tm)
+
+	if m.orgsErr != nil {
+		t.Errorf("orgsErr = %v, want cleared by a successful retry", m.orgsErr)
+	}
+	if len(m.orgs) != 1 || m.orgs[0].Name != "acme" {
+		t.Errorf("orgs = %+v, want acme from the retry's successful fetch", m.orgs)
+	}
+}
+
+func TestUserConfiguredHosts_NotAuthenticatedStaysFatal(t *testing.T) {
+	// The default newTestModel (hostsUserConfigured: true) already covers this via
+	// TestFatal_TakesOverTheWholeScreen — this test exists specifically to name the
+	// contrast with the discovered-hosts case above, so the two behaviors are
+	// pinned side by side rather than only one of them being obviously tested.
+	f := &fakeForge{orgsErr: &forge.Error{Kind: forge.ErrKindFatal, Message: "not authenticated"}}
+	tm := newTestModel(t, f)
+	m := finalModelAfter(t, tm)
+
+	if m.mode != ModeFatal {
+		t.Fatalf("mode = %v, want ModeFatal — an explicitly user-configured Host's auth failure is a real misconfiguration", m.mode)
+	}
+}
+
 func TestPaneScoped_PreservesAlreadyLoadedPagesAndOffersRetry(t *testing.T) {
 	f := &fakeForge{
 		orgPages: []forge.OrgPage{
@@ -130,7 +197,7 @@ func TestEmptyStates_AreVisiblyDistinct(t *testing.T) {
 	// exactly the "nothing has arrived yet" state — no need to actually run the
 	// program to observe it.
 	loadingForge := &fakeForge{orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}}}
-	loadingModel := New(loadingForge, []forge.Host{{Name: "github.com"}}, noopClonePreview, noopCloneRunner, "", 8)
+	loadingModel := New(loadingForge, []forge.Host{{Name: "github.com"}}, true, noopClonePreview, noopCloneRunner, "", 8)
 	loadingView := loadingModel.View()
 
 	// no orgs at all, load complete.

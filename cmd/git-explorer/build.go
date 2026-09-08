@@ -11,8 +11,9 @@ import (
 // buildModel constructs a tui.Model from an already-resolved Config, a real (or fake,
 // in tests) forge.Forge, and the two composition-root adapters. It performs no
 // filesystem, network, or environment access of its own, which is what makes it
-// directly unit-testable.
-func buildModel(f forge.Forge, cfg config.Config, preview tui.ClonePreviewFunc, runner tui.CloneRunnerFunc) tui.Model {
+// directly unit-testable. hostsUserConfigured is threaded straight through to
+// tui.New — see that field's own doc comment on tui.Model.
+func buildModel(f forge.Forge, cfg config.Config, hostsUserConfigured bool, preview tui.ClonePreviewFunc, runner tui.CloneRunnerFunc) tui.Model {
 	hosts := make([]forge.Host, len(cfg.Hosts))
 	for i, h := range cfg.Hosts {
 		hosts[i] = forge.Host{
@@ -31,7 +32,7 @@ func buildModel(f forge.Forge, cfg config.Config, preview tui.ClonePreviewFunc, 
 		target = cfg.Hosts[0].DefaultTarget
 	}
 
-	return tui.New(f, hosts, preview, runner, target, cfg.Clone.Parallelism)
+	return tui.New(f, hosts, hostsUserConfigured, preview, runner, target, cfg.Clone.Parallelism)
 }
 
 // hostKind infers a Host's Kind from its name. config.HostConfig has no Kind field of
