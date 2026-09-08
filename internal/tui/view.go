@@ -39,8 +39,19 @@ func (m Model) viewFatal() string {
 	if m.fatalErr != nil {
 		fmt.Fprintf(&b, "%v\n\n", m.fatalErr)
 	}
-	b.WriteString("[^y] switch host  [^c] quit\n")
+	b.WriteString(renderButtons(fatalButtons()))
+	b.WriteString("\n")
 	return b.String()
+}
+
+// fatalButtons has no primary: neither action is a "safer default" the way a
+// confirm dialog's cancel/stay option is — switching Host and quitting are just
+// two different escapes, not a safe-vs-unsafe choice.
+func fatalButtons() []button {
+	return []button{
+		{key: "^y", label: "switch host"},
+		{key: "^c", label: "quit"},
+	}
 }
 
 // viewHelp lists every binding straight from keymapTable — the same table the
@@ -90,8 +101,20 @@ func (m Model) viewHostSwitch() string {
 		}
 		fmt.Fprintf(&b, "%s%s %s\n", cursor, active, h.Name)
 	}
-	b.WriteString("\n[↑/↓] move  [enter] switch  [esc] cancel  [^c] quit\n")
+	b.WriteString("\n[↑/↓] move\n")
+	b.WriteString(renderButtons(hostSwitchButtons()))
+	b.WriteString("\n")
 	return b.String()
+}
+
+// hostSwitchButtons: cancel is primary — leaving everything unchanged is the safe
+// default when you've opened the switcher but haven't committed to a choice.
+func hostSwitchButtons() []button {
+	return []button{
+		{key: "enter", label: "switch"},
+		{key: "esc", label: "cancel", primary: true},
+		{key: "^c", label: "quit"},
+	}
 }
 
 // viewCloneDialog shows the exact destination path for every selected Repo — sourced
@@ -117,8 +140,20 @@ func (m Model) viewCloneDialog() string {
 	for _, r := range m.clonePreviewResults {
 		fmt.Fprintf(&b, "%-30s %-10s %s\n", r.Repo.Name, r.Outcome, r.Dest)
 	}
-	b.WriteString("\n[enter] clone  [esc] cancel\n")
+	b.WriteString("\n")
+	b.WriteString(renderButtons(cloneDialogButtons()))
+	b.WriteString("\n")
 	return b.String()
+}
+
+// cloneDialogButtons: cancel is primary — cloning is the one-way action here (a
+// Clone Run can conflict-skip its way around existing paths, but it still writes
+// to disk), cancel is the reversible default.
+func cloneDialogButtons() []button {
+	return []button{
+		{key: "enter", label: "clone"},
+		{key: "esc", label: "cancel", primary: true},
+	}
 }
 
 // viewCloneRun shows an indeterminate in-flight state while the single tea.Cmd
@@ -164,8 +199,20 @@ func (m Model) viewCloneRun() string {
 func (m Model) viewLeavePrompt() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d repos selected in %s\n\n", m.selectionCount(), m.currentOrg.Name)
-	b.WriteString("[c] clone now  [d] discard  [esc] stay\n")
+	b.WriteString(renderButtons(leavePromptButtons()))
+	b.WriteString("\n")
 	return b.String()
+}
+
+// leavePromptButtons: stay is primary — of the three, it's the only one that
+// commits to nothing, the safest response to a prompt you weren't necessarily
+// expecting.
+func leavePromptButtons() []button {
+	return []button{
+		{key: "c", label: "clone now"},
+		{key: "d", label: "discard"},
+		{key: "esc", label: "stay", primary: true},
+	}
 }
 
 // paneBorderCols is how many columns a bordered pane consumes beyond its content
