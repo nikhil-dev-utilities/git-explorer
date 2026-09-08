@@ -82,7 +82,11 @@ Errors are scoped to their blast radius rather than funnelled through one widget
 
 - **Fatal** — full screen, with the exact command to fix it. Missing `git` or `gh`, or no
   `gh` auth for the active Host. Nothing else in the app works, so nothing else is shown.
-  Offers `^y` to pick another Host rather than only `^c` to quit.
+  Offers `^y` to pick another Host rather than only `^c` to quit. Reserved for a Host the
+  user explicitly configured themselves failing auth — a real misconfiguration. When the
+  active Host instead came from zero-config discovery (or its last-resort implicit
+  `github.com` default), the identical "not authenticated" failure downgrades to
+  pane-scoped instead: nothing was misconfigured, there was just nothing to discover yet.
 - **Pane-scoped** — inline in the affected pane, *keeping whatever already loaded*. A
   progressive load that dies at page 15 keeps its 1,400 Orgs and offers `^r`. Losing them
   to a network blip would be the worst possible response.

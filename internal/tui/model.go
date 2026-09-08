@@ -103,6 +103,15 @@ type Model struct {
 	hosts         []forge.Host
 	activeHostIdx int
 	hostCursor    int // cursor within ModeHostSwitch's listing
+	// hostsUserConfigured is false when hosts came from composition-root discovery
+	// (gh's own authenticated-host list, or the last-resort implicit github.com)
+	// rather than an explicit hosts: list the user wrote themselves. When false, a
+	// Fatal "not authenticated" failure downgrades to pane-scoped instead of taking
+	// over the whole screen — there's nothing the user configured wrong, just
+	// nothing to discover yet, and pane-scoped's inline retry is the gentler fit.
+	// An explicit hosts: list that fails auth is a real misconfiguration and stays
+	// Fatal.
+	hostsUserConfigured bool
 
 	mode  Mode
 	focus Focus
@@ -183,24 +192,28 @@ func (m Model) selectionCount() int {
 
 // New constructs a Model. f, preview, and runner are injected so this package's
 // tests never depend on a real Forge or touch the filesystem/git. hosts must be
-// non-empty; the first is active at launch. target pre-fills the clone dialog (from
-// Config's clone.default_target — empty is valid and means the dialog opens with no
-// default, exactly as DESIGN.md's zero-config case describes); it is never written
-// back to anything, only ever read. parallelism bounds a Clone Run (Config's
-// clone.parallelism); values below 1 are clone.Run's own concern, not this
-// package's — it passes parallelism through unmodified.
-func New(f forge.Forge, hosts []forge.Host, preview ClonePreviewFunc, runner CloneRunnerFunc, target string, parallelism int) Model {
+// non-empty; the first is active at launch. hostsUserConfigured is whether hosts
+// came from an explicit hosts: list the user wrote themselves, as opposed to
+// composition-root discovery or its last-resort implicit-github.com fallback — see
+// the Model field's own doc comment for what this changes. target pre-fills the
+// clone dialog (from Config's clone.default_target — empty is valid and means the
+// dialog opens with no default, exactly as DESIGN.md's zero-config case describes);
+// it is never written back to anything, only ever read. parallelism bounds a Clone
+// Run (Config's clone.parallelism); values below 1 are clone.Run's own concern, not
+// this package's — it passes parallelism through unmodified.
+func New(f forge.Forge, hosts []forge.Host, hostsUserConfigured bool, preview ClonePreviewFunc, runner CloneRunnerFunc, target string, parallelism int) Model {
 	if len(hosts) == 0 {
 		panic("tui.New: hosts must be non-empty")
 	}
 	return Model{
-		forge:            f,
-		hosts:            hosts,
-		mode:             ModeBrowse,
-		clonePreview:     preview,
-		cloneTarget:      target,
-		cloneRun:         runner,
-		cloneParallelism: parallelism,
+		forge:               f,
+		hosts:               hosts,
+		hostsUserConfigured: hostsUserConfigured,
+		mode:                ModeBrowse,
+		clonePreview:        preview,
+		cloneTarget:         target,
+		cloneRun:            runner,
+		cloneParallelism:    parallelism,
 	}
 }
 

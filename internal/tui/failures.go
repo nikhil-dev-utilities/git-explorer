@@ -37,9 +37,13 @@ func retryAfter(err error) time.Duration {
 // renders inline in the Org pane, also preserving whatever already loaded. In every
 // case, orgsLoaded is set so the pane stops showing "loading" — the stream has ended
 // either way, per Forge's contract.
+//
+// A Fatal error downgrades to PaneScoped when hostsUserConfigured is false — see
+// that field's doc comment. This is the only place that downgrade happens; nothing
+// about Forge's contract or classify's own Kind-reading logic changes.
 func (m Model) applyOrgsFailure(err error) Model {
 	m.orgsLoaded = true
-	switch classify(err) {
+	switch m.effectiveErrorKind(err) {
 	case forge.ErrKindFatal:
 		m.mode = ModeFatal
 		m.fatalErr = err
@@ -53,7 +57,7 @@ func (m Model) applyOrgsFailure(err error) Model {
 
 func (m Model) applyReposFailure(err error) Model {
 	m.reposLoaded = true
-	switch classify(err) {
+	switch m.effectiveErrorKind(err) {
 	case forge.ErrKindFatal:
 		m.mode = ModeFatal
 		m.fatalErr = err
@@ -63,6 +67,19 @@ func (m Model) applyReposFailure(err error) Model {
 		m.reposErr = err
 	}
 	return m
+}
+
+// effectiveErrorKind is classify(err), except a Fatal is downgraded to PaneScoped
+// when m.hostsUserConfigured is false: nothing was misconfigured by the user in
+// that case, there was just nothing for composition-root discovery to find yet, and
+// PaneScoped's inline "^r retry" is the gentler fit for that — see
+// hostsUserConfigured's own doc comment on Model.
+func (m Model) effectiveErrorKind(err error) forge.ErrorKind {
+	kind := classify(err)
+	if kind == forge.ErrKindFatal && !m.hostsUserConfigured {
+		return forge.ErrKindPaneScoped
+	}
+	return kind
 }
 
 // retryOrgs re-attempts ListOrgs from scratch. Forge has no "resume from the page

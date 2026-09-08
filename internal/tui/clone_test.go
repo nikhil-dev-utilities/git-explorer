@@ -31,7 +31,7 @@ func newTestModelWithPreview(t *testing.T, f *fakeForge, preview ClonePreviewFun
 
 func newTestModelWithCloneRunner(t *testing.T, f *fakeForge, preview ClonePreviewFunc, runner CloneRunnerFunc, target string) *teatest.TestModel {
 	t.Helper()
-	m := New(f, []forge.Host{{Name: "github.com"}}, preview, runner, target, 8)
+	m := New(f, []forge.Host{{Name: "github.com"}}, true, preview, runner, target, 8)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(120, 24))
 	t.Cleanup(func() { _ = tm.Quit() })
 	return tm

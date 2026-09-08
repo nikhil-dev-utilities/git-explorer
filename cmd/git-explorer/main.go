@@ -58,8 +58,12 @@ func run() error {
 
 	// Only when the user's own config didn't declare hosts: — an explicit list
 	// always wins over discovery, even if it happens to match what discovery would
-	// have found anyway.
-	if !fileDeclaresHosts(fileBytes) {
+	// have found anyway. hostsUserConfigured is also handed to buildModel: a Fatal
+	// "not authenticated" failure against a discovered (or last-resort implicit)
+	// Host is treated more gently than one against a Host the user explicitly
+	// configured themselves — see tui.Model's hostsUserConfigured field.
+	hostsUserConfigured := fileDeclaresHosts(fileBytes)
+	if !hostsUserConfigured {
 		if discovered := github.DiscoverAuthenticatedHosts(env.Getenv); len(discovered) > 0 {
 			cfg.Hosts = discoveredConfigHosts(discovered, cfg.Clone.DefaultTarget)
 		}
@@ -68,7 +72,7 @@ func run() error {
 	slog.SetDefault(config.NewLogger(cfg.Log))
 
 	f := github.New()
-	model := buildModel(f, cfg, previewClones, clone.Run)
+	model := buildModel(f, cfg, hostsUserConfigured, previewClones, clone.Run)
 
 	_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
 	return err

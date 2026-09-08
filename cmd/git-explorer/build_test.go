@@ -53,7 +53,7 @@ func TestBuildModel_HostsCarryInferredKind(t *testing.T) {
 		Clone: config.CloneConfig{Parallelism: 4},
 	}
 
-	model := buildModel(fakeForge{}, cfg, noopPreview, noopRunner)
+	model := buildModel(fakeForge{}, cfg, true, noopPreview, noopRunner)
 
 	// Model doesn't expose hosts directly; exercise it indirectly through the one
 	// observable surface buildModel's own callers care about — that New didn't
@@ -75,7 +75,7 @@ func TestBuildModel_EmptyHostsPanics(t *testing.T) {
 			t.Error("buildModel with zero Hosts did not panic, want it to (tui.New requires non-empty hosts)")
 		}
 	}()
-	buildModel(fakeForge{}, config.Config{}, noopPreview, noopRunner)
+	buildModel(fakeForge{}, config.Config{}, true, noopPreview, noopRunner)
 }
 
 func TestResolveConfigPath(t *testing.T) {

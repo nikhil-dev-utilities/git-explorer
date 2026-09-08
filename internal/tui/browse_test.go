@@ -24,12 +24,31 @@ const settleDelay = 200 * time.Millisecond
 
 // newTestModel constructs a TestModel with a single default Host, unless hosts is
 // given explicitly (for host-switching tests, which need more than one).
+// hostsUserConfigured is true — the vast majority of this package's tests exercise
+// ordinary explicit-config behavior; newTestModelWithDiscoveredHosts is the
+// dedicated helper for the composition-root-discovery case.
 func newTestModel(t *testing.T, f *fakeForge, hosts ...forge.Host) *teatest.TestModel {
 	t.Helper()
 	if len(hosts) == 0 {
 		hosts = []forge.Host{{Name: "github.com"}}
 	}
-	m := New(f, hosts, noopClonePreview, noopCloneRunner, "", 8)
+	m := New(f, hosts, true, noopClonePreview, noopCloneRunner, "", 8)
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
+	t.Cleanup(func() {
+		_ = tm.Quit()
+	})
+	return tm
+}
+
+// newTestModelWithDiscoveredHosts is newTestModel but with hostsUserConfigured
+// false, for tests exercising the softened-Fatal-to-pane-scoped behavior that only
+// applies when hosts came from discovery rather than the user's own config.
+func newTestModelWithDiscoveredHosts(t *testing.T, f *fakeForge, hosts ...forge.Host) *teatest.TestModel {
+	t.Helper()
+	if len(hosts) == 0 {
+		hosts = []forge.Host{{Name: "github.com"}}
+	}
+	m := New(f, hosts, false, noopClonePreview, noopCloneRunner, "", 8)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
 	t.Cleanup(func() {
 		_ = tm.Quit()
