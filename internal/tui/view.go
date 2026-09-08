@@ -97,10 +97,12 @@ func (m Model) viewHostSwitch() string {
 // viewCloneDialog shows the exact destination path for every selected Repo — sourced
 // from clonePreviewResults, which clone.TargetPath (via the injected
 // ClonePreviewFunc) computed, never a reimplementation of that logic here — plus its
-// pre-flight classification, updating live as the org-subdirectory toggle flips.
+// pre-flight classification, updating live as the org-subdirectory toggle flips or
+// the target path itself is edited (see editCloneTarget).
 func (m Model) viewCloneDialog() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "clone %d repos to %s\n", m.selectionCount(), m.cloneTarget)
+	fmt.Fprintf(&b, "clone %d repos\n", m.selectionCount())
+	fmt.Fprintf(&b, "target: %s (type to edit)\n", m.cloneTarget)
 	subdir := "off"
 	if m.cloneOrgSubdir {
 		subdir = "on"
