@@ -56,6 +56,15 @@ func run() error {
 		return err
 	}
 
+	// Only when the user's own config didn't declare hosts: — an explicit list
+	// always wins over discovery, even if it happens to match what discovery would
+	// have found anyway.
+	if !fileDeclaresHosts(fileBytes) {
+		if discovered := github.DiscoverAuthenticatedHosts(env.Getenv); len(discovered) > 0 {
+			cfg.Hosts = discoveredConfigHosts(discovered, cfg.Clone.DefaultTarget)
+		}
+	}
+
 	slog.SetDefault(config.NewLogger(cfg.Log))
 
 	f := github.New()
