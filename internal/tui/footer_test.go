@@ -10,10 +10,11 @@ import (
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
-// The persistent footer is DESIGN.md's own mockup: "host: ... · N selected · ^y
-// host · enter clone · F1 help" below the panes, on every frame — not just on error.
-// It was missing entirely from Browse mode's View() before this; these tests guard
-// against it silently disappearing again.
+// The persistent footer is a compact status line ("host: ... · N selected") plus a
+// nano/mc-style key-hint grid below it, on every frame — not just on error. Browse
+// mode had no on-screen hint at all before the status line was first added; the
+// grid then replaced a single combined status+hints line that only had room for a
+// handful of keys. These tests guard both pieces against silently disappearing.
 
 func TestBrowseFooter_PresentOnFirstFrame(t *testing.T) {
 	f := &fakeForge{orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}}}
@@ -22,7 +23,7 @@ func TestBrowseFooter_PresentOnFirstFrame(t *testing.T) {
 	m := finalModelAfter(t, tm)
 
 	view := m.View()
-	for _, want := range []string{"host:", "github.com", "0 selected", "^y host", "F1 help"} {
+	for _, want := range []string{"host:", "github.com", "0 selected", "^y", "switch host", "F1", "help"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("View() = %q, want it to contain footer text %q", view, want)
 		}
@@ -38,16 +39,16 @@ func TestBrowseFooter_EnterHintChangesWithFocus(t *testing.T) {
 	time.Sleep(settleDelay)
 
 	m0 := finalModelAfter(t, tm)
-	if !strings.Contains(m0.View(), "enter descend") {
-		t.Errorf("View() = %q, want \"enter descend\" while focused on Orgs", m0.View())
+	if !strings.Contains(m0.View(), "descend") {
+		t.Errorf("View() = %q, want the Enter hint to say \"descend\" while focused on Orgs", m0.View())
 	}
 
 	tm2 := newTestModel(t, f)
 	time.Sleep(settleDelay)
 	tm2.Send(tea.KeyMsg{Type: tea.KeyEnter}) // descend into Repos
 	m1 := finalModelAfter(t, tm2)
-	if !strings.Contains(m1.View(), "enter clone") {
-		t.Errorf("View() = %q, want \"enter clone\" while focused on Repos", m1.View())
+	if !strings.Contains(m1.View(), "clone") {
+		t.Errorf("View() = %q, want the Enter hint to say \"clone\" while focused on Repos", m1.View())
 	}
 }
 

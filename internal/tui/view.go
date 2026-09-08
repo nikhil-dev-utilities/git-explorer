@@ -193,7 +193,7 @@ const (
 func (m Model) viewBrowse() string {
 	if m.width == 0 {
 		pane := lipgloss.JoinHorizontal(lipgloss.Top, m.viewOrgPane(), " ", m.viewRepoPane(repoDetailFull))
-		return m.withBrowseFooter(pane)
+		return m.withBrowseFooter(pane, browseFooterFallbackWidth)
 	}
 
 	if m.width < tooNarrowWidth {
@@ -201,13 +201,14 @@ func (m Model) viewBrowse() string {
 	}
 
 	repoWidth := m.width - orgPaneWidth - paneGapCols - paneBorderCols*2
+	footerRows := m.browseFooterRows(m.width)
 
 	orgColor, repoColor := m.paneBorderColors()
-	orgCol := m.paneStyle(orgPaneWidth, orgColor).Render(m.viewOrgPane())
-	repoCol := m.paneStyle(repoWidth, repoColor).Render(m.viewRepoPane(detailForWidth(repoWidth)))
+	orgCol := m.paneStyle(orgPaneWidth, orgColor, footerRows).Render(m.viewOrgPane())
+	repoCol := m.paneStyle(repoWidth, repoColor, footerRows).Render(m.viewRepoPane(detailForWidth(repoWidth)))
 
 	pane := lipgloss.JoinHorizontal(lipgloss.Top, orgCol, " ", repoCol)
-	return m.withBrowseFooter(pane)
+	return m.withBrowseFooter(pane, m.width)
 }
 
 // paneBorderColors picks each pane's border color from focus — exactly one of the
@@ -225,16 +226,12 @@ func (m Model) paneBorderColors() (orgColor, repoColor lipgloss.Color) {
 
 // paneStyle is the shared bordered-box style for a Browse pane: the given content
 // width, bordered and colored by focus, stretched to fill the terminal's full height
-// short of what the footer (and, when present, the status line) needs below it —
-// only called once m.height is known (the m.width == 0 branch above never reaches
-// this), so this is the only place that height budget is computed.
-func (m Model) paneStyle(width int, color lipgloss.Color) lipgloss.Style {
+// short of footerRows (the caller already knows exactly how many rows the footer
+// below it will take — see browseFooterRows) — only called once m.height is known
+// (the m.width == 0 branch above never reaches this).
+func (m Model) paneStyle(width int, color lipgloss.Color, footerRows int) lipgloss.Style {
 	style := lipgloss.NewStyle().Width(width).Border(lipgloss.RoundedBorder()).BorderForeground(color)
 
-	footerRows := 1
-	if m.statusLine() != "" {
-		footerRows++
-	}
 	contentHeight := m.height - paneBorderRows - footerRows
 	if contentHeight < 1 {
 		contentHeight = 1
@@ -242,31 +239,46 @@ func (m Model) paneStyle(width int, color lipgloss.Color) lipgloss.Style {
 	return style.Height(contentHeight)
 }
 
-// withBrowseFooter appends the persistent footer DESIGN.md's own mockup shows below
-// the panes — active Host, Selection count, and the handful of keys someone actually
-// needs in the moment (never the full keymap; F1 already opens that) — followed by
-// the transient status line, if any. This is the one place in Browse mode a user gets
-// any on-screen hint of what to press, so it's never conditional on anything: it's
-// there on the very first frame and every frame after.
-func (m Model) withBrowseFooter(pane string) string {
+// browseFooterFallbackWidth is used only when m.width == 0 (View() called directly,
+// no real terminal) — wide enough for the key-hint grid to lay out at a reasonable
+// column count without a real width to measure against.
+const browseFooterFallbackWidth = 80
+
+// browseFooterRows is how many screen rows withBrowseFooter(_, width) will occupy:
+// the compact status line, the key-hint grid (however many rows it wraps to at this
+// width), and the transient status line when present. Computed separately from
+// withBrowseFooter itself so viewBrowse can size the panes above it before
+// rendering the footer text.
+func (m Model) browseFooterRows(width int) int {
+	rows := 1 + keyHintGridRows(m.currentBrowseKeyHints(), width) // status line + hint grid
+	if m.statusLine() != "" {
+		rows++
+	}
+	return rows
+}
+
+// withBrowseFooter appends the persistent footer below the panes: a compact status
+// line (active Host, live Selection count), then a nano/mc-style key-hint grid
+// listing the actions someone actually reaches for (F1 still owns the exhaustive
+// listing), then the transient status line, if any. This is the one place in Browse
+// mode a user gets any on-screen hint of what to press, so it's never conditional
+// on anything: it's there on the very first frame and every frame after.
+func (m Model) withBrowseFooter(pane string, width int) string {
 	var b strings.Builder
 	b.WriteString(pane)
 	b.WriteString("\n")
-	b.WriteString(m.browseFooter())
-	if status := m.statusLine(); status != "" {
-		b.WriteString("\n")
-		b.WriteString(status)
-	}
+	b.WriteString(m.browseStatusLine())
+	b.WriteString("\n")
+	b.WriteString(renderKeyHintGrid(m.currentBrowseKeyHints(), width))
+	b.WriteString(m.statusLine())
 	return b.String()
 }
 
-func (m Model) browseFooter() string {
-	enterHint := "enter descend"
-	if m.focus == FocusRepos {
-		enterHint = "enter clone"
-	}
-	return fmt.Sprintf(" host: %s · %d selected · ^y host · %s · F1 help",
-		m.activeHost().Name, m.selectionCount(), enterHint)
+// browseStatusLine is deliberately just the two things that change from moment to
+// moment — active Host and live Selection count — never key hints, which live in
+// the grid below it.
+func (m Model) browseStatusLine() string {
+	return fmt.Sprintf(" host: %s · %d selected", m.activeHost().Name, m.selectionCount())
 }
 
 func (m Model) viewOrgPane() string {

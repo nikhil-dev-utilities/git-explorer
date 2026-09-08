@@ -19,7 +19,7 @@ func TestPaneStyle_AppliesTheGivenBorderColor(t *testing.T) {
 	time.Sleep(settleDelay)
 	m := finalModelAfter(t, tm)
 
-	style := m.paneStyle(orgPaneWidth, focusedBorderColor)
+	style := m.paneStyle(orgPaneWidth, focusedBorderColor, m.browseFooterRows(m.width))
 	if got := style.GetBorderTopForeground(); got != focusedBorderColor {
 		t.Errorf("border color = %v, want focusedBorderColor", got)
 	}
@@ -73,10 +73,12 @@ func TestPaneStyle_HeightFillsTerminalShortOfFooter(t *testing.T) {
 	time.Sleep(settleDelay)
 	m := finalModelAfter(t, tm)
 
-	style := m.paneStyle(orgPaneWidth, focusedBorderColor)
-	// 24 rows total - 2 border rows - 1 footer row (no status line) = 21 content rows.
-	if got := style.GetHeight(); got != 21 {
-		t.Errorf("content height = %d, want 21 (24 - border(2) - footer(1))", got)
+	footerRows := m.browseFooterRows(m.width) // 1 status line + 3 hint-grid rows at width 80
+	style := m.paneStyle(orgPaneWidth, focusedBorderColor, footerRows)
+	// 24 rows total - 2 border rows - 4 footer rows (1 status + 3 grid, no
+	// transient status line) = 18 content rows.
+	if got := style.GetHeight(); got != 18 {
+		t.Errorf("content height = %d, want 18 (24 - border(2) - footerRows(%d))", got, footerRows)
 	}
 }
 
@@ -87,8 +89,9 @@ func TestPaneStyle_ReservesAnExtraRowWhenStatusLinePresent(t *testing.T) {
 	m := finalModelAfter(t, tm)
 	m.transientErr = &forge.Error{Kind: forge.ErrKindTransient, Message: "rate limited"}
 
-	style := m.paneStyle(orgPaneWidth, focusedBorderColor)
-	if got := style.GetHeight(); got != 20 {
-		t.Errorf("content height = %d, want 20 (24 - border(2) - footer(1) - status(1))", got)
+	footerRows := m.browseFooterRows(m.width) // 1 status + 3 grid + 1 transient status
+	style := m.paneStyle(orgPaneWidth, focusedBorderColor, footerRows)
+	if got := style.GetHeight(); got != 17 {
+		t.Errorf("content height = %d, want 17 (24 - border(2) - footerRows(%d))", got, footerRows)
 	}
 }
