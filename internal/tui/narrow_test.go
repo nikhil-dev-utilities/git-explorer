@@ -53,7 +53,8 @@ func descendedModel(t *testing.T, width int) Model {
 }
 
 func TestLayout_FullWidthShowsNameBadgesAndDate(t *testing.T) {
-	// repoWidth = 120 - orgPaneWidth(28) - 1 = 91, well above repoPaneFullWidth.
+	// repoWidth = 120 - orgPaneWidth(28) - paneBorderCols*2(4) - paneGapCols(1) = 87,
+	// well above repoPaneFullWidth.
 	m := descendedModel(t, 120)
 	view := m.View()
 
@@ -69,9 +70,9 @@ func TestLayout_FullWidthShowsNameBadgesAndDate(t *testing.T) {
 }
 
 func TestLayout_MediumWidthDropsDateKeepsBadges(t *testing.T) {
-	// repoWidth = 78 - 28 - 1 = 49, between repoPaneNoDateWidth(45) and
+	// repoWidth = 80 - 28 - 4 - 1 = 47, between repoPaneNoDateWidth(46) and
 	// repoPaneFullWidth(55).
-	m := descendedModel(t, 78)
+	m := descendedModel(t, 80)
 	view := m.View()
 
 	if !strings.Contains(view, "api") {
@@ -86,7 +87,7 @@ func TestLayout_MediumWidthDropsDateKeepsBadges(t *testing.T) {
 }
 
 func TestLayout_NarrowWidthNameOnly(t *testing.T) {
-	// repoWidth = 65 - 28 - 1 = 36, below repoPaneNoDateWidth(45), but total width
+	// repoWidth = 65 - 28 - 4 - 1 = 32, below repoPaneNoDateWidth(46), but total width
 	// (65) is still >= tooNarrowWidth(60), so the two-pane layout itself survives.
 	m := descendedModel(t, 65)
 	view := m.View()

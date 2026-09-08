@@ -168,20 +168,30 @@ func (m Model) viewLeavePrompt() string {
 	return b.String()
 }
 
+// paneBorderCols is how many columns a bordered pane consumes beyond its content
+// width (one column each side). paneGapCols is the blank column left between the
+// two bordered panes. paneBorderRows is the same for height (one row each side).
+const (
+	paneBorderCols = 2
+	paneGapCols    = 1
+	paneBorderRows = 2
+)
+
 // viewBrowse renders the Org and Repo panes side by side, Finder-style — both
 // visible at once, with focus determining which one receives key input, not which
-// one is shown. Below tooNarrowWidth the two-column layout is abandoned for a single
-// message rather than rendering something broken or overlapping.
+// one is shown. Each pane gets its own bounding box, stretched to fill the terminal's
+// full height (short of what the footer needs below it) — the focused pane's border
+// is a distinct color, so focus is legible at a glance. Below tooNarrowWidth the
+// two-column layout is abandoned for a single message rather than rendering something
+// broken or overlapping.
 //
 // A width of 0 means no tea.WindowSizeMsg has arrived yet (only possible in tests
 // that call View() directly without going through a real Bubble Tea Program, which
 // always sends one immediately at startup) — treated as "wide enough," so those
-// tests see the same pane content this package's earlier slices always rendered.
+// tests see the same pane content this package's earlier slices always rendered, with
+// no border or height constraint (there being no real terminal height to fill).
 func (m Model) viewBrowse() string {
 	if m.width == 0 {
-		// No real terminal size known — render both panes at their natural width,
-		// full detail, no column constraint. Only reachable when View() is called
-		// directly without going through a real Bubble Tea Program.
 		pane := lipgloss.JoinHorizontal(lipgloss.Top, m.viewOrgPane(), " ", m.viewRepoPane(repoDetailFull))
 		return m.withBrowseFooter(pane)
 	}
@@ -190,12 +200,46 @@ func (m Model) viewBrowse() string {
 		return "terminal too narrow\n"
 	}
 
-	repoWidth := m.width - orgPaneWidth - 1
-	orgCol := lipgloss.NewStyle().Width(orgPaneWidth).Render(m.viewOrgPane())
-	repoCol := lipgloss.NewStyle().Width(repoWidth).Render(m.viewRepoPane(detailForWidth(repoWidth)))
+	repoWidth := m.width - orgPaneWidth - paneGapCols - paneBorderCols*2
+
+	orgColor, repoColor := m.paneBorderColors()
+	orgCol := m.paneStyle(orgPaneWidth, orgColor).Render(m.viewOrgPane())
+	repoCol := m.paneStyle(repoWidth, repoColor).Render(m.viewRepoPane(detailForWidth(repoWidth)))
 
 	pane := lipgloss.JoinHorizontal(lipgloss.Top, orgCol, " ", repoCol)
 	return m.withBrowseFooter(pane)
+}
+
+// paneBorderColors picks each pane's border color from focus — exactly one of the
+// two is ever focusedBorderColor, so which pane has input focus is legible from the
+// border alone, without reading any text.
+func (m Model) paneBorderColors() (orgColor, repoColor lipgloss.Color) {
+	orgColor, repoColor = blurredBorderColor, blurredBorderColor
+	if m.focus == FocusOrgs {
+		orgColor = focusedBorderColor
+	} else {
+		repoColor = focusedBorderColor
+	}
+	return orgColor, repoColor
+}
+
+// paneStyle is the shared bordered-box style for a Browse pane: the given content
+// width, bordered and colored by focus, stretched to fill the terminal's full height
+// short of what the footer (and, when present, the status line) needs below it —
+// only called once m.height is known (the m.width == 0 branch above never reaches
+// this), so this is the only place that height budget is computed.
+func (m Model) paneStyle(width int, color lipgloss.Color) lipgloss.Style {
+	style := lipgloss.NewStyle().Width(width).Border(lipgloss.RoundedBorder()).BorderForeground(color)
+
+	footerRows := 1
+	if m.statusLine() != "" {
+		footerRows++
+	}
+	contentHeight := m.height - paneBorderRows - footerRows
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	return style.Height(contentHeight)
 }
 
 // withBrowseFooter appends the persistent footer DESIGN.md's own mockup shows below

@@ -29,6 +29,9 @@ Two fixed columns, always.
 
 - Left pane: Orgs, filtered by name and Affiliation. No repo counts — see ADR-0002.
 - Right pane: Repos of the focused Org, with `pushed_at` and state badges.
+- Implemented as two independently-bordered boxes rather than the single shared frame
+  sketched above — each stretches to the terminal's full height, and the focused
+  pane's border is a distinct color, so focus is legible without reading any text.
 - Sort: name or last activity, in either pane.
 - Filter: substring, case-insensitive. A leading `/` switches the box to regex — a Repo
   name cannot begin with `/`, so this is unambiguous. Starts-with and ends-with are

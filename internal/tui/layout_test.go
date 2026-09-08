@@ -10,8 +10,8 @@ func TestDetailForWidth(t *testing.T) {
 		{200, repoDetailFull},
 		{55, repoDetailFull},
 		{54, repoDetailNoDate},
-		{45, repoDetailNoDate},
-		{44, repoDetailNameOnly},
+		{46, repoDetailNoDate},
+		{45, repoDetailNameOnly},
 		{0, repoDetailNameOnly},
 	}
 	for _, tt := range tests {
