@@ -29,6 +29,8 @@ var keymapTable = []keyBinding{
 	{"Browse", "type", "", "edit the focused pane's filter"},
 	{"Browse", "/", "", "switch the filter to regex"},
 	{"Browse", "↑/↓, ^p/^n", "", "move the cursor"},
+	{"Browse", "→", "", "Orgs: descend (same as Enter)"},
+	{"Browse", "←", "", "Repos: back to Orgs (same as Esc)"},
 	{"Browse", "Enter", "alt-c", "Orgs: descend · Repos: open clone dialog"},
 	{"Browse", "Esc", "", "Repos: back to Orgs · Orgs: clear filter"},
 	{"Browse", "Tab", "", "tick/untick the focused Repo"},

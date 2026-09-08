@@ -161,6 +161,24 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.moveCursor(1), nil
 	case tea.KeyEnter:
 		return m.handleEnter()
+	case tea.KeyRight:
+		// Additive alias for Enter's Orgs-pane behavior specifically — descend into
+		// the highlighted Org. A no-op when already in the Repos pane: Enter still
+		// owns "open the clone dialog" there, so Right isn't given a second,
+		// different meaning depending on focus the way Enter has.
+		if m.focus == FocusOrgs {
+			return m.descend()
+		}
+		return m, nil
+	case tea.KeyLeft:
+		// Additive alias for Esc's Repos-pane behavior specifically — go back to
+		// Orgs, still routed through leaveRepos so a non-empty Selection still gets
+		// ADR-0005's LeavePrompt guard. A no-op on the Orgs pane: Esc still owns
+		// "clear the filter" there, which Left doesn't take over.
+		if m.focus == FocusRepos {
+			return m.leaveRepos(), nil
+		}
+		return m, nil
 	case tea.KeyEsc:
 		return m.handleEsc(), nil
 	case tea.KeyTab:
