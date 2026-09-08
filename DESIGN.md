@@ -32,6 +32,11 @@ Two fixed columns, always.
 - Implemented as two independently-bordered boxes rather than the single shared frame
   sketched above — each stretches to the terminal's full height, and the focused
   pane's border is a distinct color, so focus is legible without reading any text.
+- The single footer line sketched above (`host: ... · 3 selected · ^y host · enter
+  clone · F1 help`) is also implemented differently: a compact one-line status
+  (`host: ... · N selected`) plus a separate, nano/mc-style multi-row key-hint grid
+  below it, listing meaningfully more of the available keys than one line ever had
+  room for. `F1` still owns the exhaustive listing.
 - Sort: name or last activity, in either pane.
 - Filter: substring, case-insensitive. A leading `/` switches the box to regex — a Repo
   name cannot begin with `/`, so this is unambiguous. Starts-with and ends-with are
