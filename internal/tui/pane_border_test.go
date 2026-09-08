@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -94,4 +95,48 @@ func TestPaneStyle_ReservesAnExtraRowWhenStatusLinePresent(t *testing.T) {
 	if got := style.GetHeight(); got != 17 {
 		t.Errorf("content height = %d, want 17 (24 - border(2) - footerRows(%d))", got, footerRows)
 	}
+}
+
+// TestViewBrowse_TotalRenderedLinesExactlyMatchesHeight is a real regression test:
+// View()'s budgeted content height (paneStyle) and its actual rendered output
+// silently disagreed by exactly one line — renderKeyHintGrid terminates every row,
+// including the last, with "\n" (by design, so callers can count rows), but
+// withBrowseFooter didn't trim that trailing newline before returning. The result
+// was one line more than the terminal's real height on every frame — invisible to
+// every other test here, which only check content height budgets or substring
+// presence, never actual total line count. On a real terminal, whose alt-screen
+// buffer has no scrollback to absorb the extra line, this pushed the *top* row (the
+// pane borders' top edge) out of view — reported live, confirmed by checking actual
+// line counts, not just reasoning about the height math.
+func TestViewBrowse_TotalRenderedLinesExactlyMatchesHeight(t *testing.T) {
+	f := &fakeForge{orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}}}
+
+	t.Run("no transient status line", func(t *testing.T) {
+		tm := newTestModel(t, f)
+		time.Sleep(settleDelay)
+		m := finalModelAfter(t, tm)
+
+		lines := strings.Split(m.View(), "\n")
+		if len(lines) != m.height {
+			t.Fatalf("View() has %d lines, want exactly %d (m.height)", len(lines), m.height)
+		}
+		if !strings.HasPrefix(lines[0], "╭") {
+			t.Errorf("first line = %q, want it to start with the pane's top border", lines[0])
+		}
+	})
+
+	t.Run("with transient status line", func(t *testing.T) {
+		tm := newTestModel(t, f)
+		time.Sleep(settleDelay)
+		m := finalModelAfter(t, tm)
+		m.transientErr = &forge.Error{Kind: forge.ErrKindTransient, Message: "rate limited"}
+
+		lines := strings.Split(m.View(), "\n")
+		if len(lines) != m.height {
+			t.Fatalf("View() has %d lines, want exactly %d (m.height)", len(lines), m.height)
+		}
+		if !strings.HasPrefix(lines[0], "╭") {
+			t.Errorf("first line = %q, want it to start with the pane's top border", lines[0])
+		}
+	})
 }
