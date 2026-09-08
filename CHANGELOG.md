@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.1.1...v0.2.0) (2026-09-08)
+
+
+### Features
+
+* **tui:** add a bordered, focus-colored bounding box to each pane ([#63](https://github.com/nikhil-dev-utilities/git-explorer/issues/63)) ([ccb2b32](https://github.com/nikhil-dev-utilities/git-explorer/commit/ccb2b32a5335a26da7e86177f8adefceb28e0d8c))
+* **tui:** add Left/Right as additive Orgs&lt;-&gt;Repos pane navigation ([#61](https://github.com/nikhil-dev-utilities/git-explorer/issues/61)) ([fac0431](https://github.com/nikhil-dev-utilities/git-explorer/commit/fac04317cf126f321f5343e8b2b5651d079ad8a3))
+* **tui:** add persistent footer to Browse and HostSwitch ([#60](https://github.com/nikhil-dev-utilities/git-explorer/issues/60)) ([00593a5](https://github.com/nikhil-dev-utilities/git-explorer/commit/00593a534e24e3a950bf1e305dfcc5af29157237))
+* **tui:** make the clone dialog's target path editable ([#62](https://github.com/nikhil-dev-utilities/git-explorer/issues/62)) ([b535b40](https://github.com/nikhil-dev-utilities/git-explorer/commit/b535b401075113fbd000792a921b70bcd9ff597a))
+
+
+### Bug Fixes
+
+* **forge/github:** force -X GET on every gh api call ([#58](https://github.com/nikhil-dev-utilities/git-explorer/issues/58)) ([450b397](https://github.com/nikhil-dev-utilities/git-explorer/commit/450b397a0848452ef740faa7cc2bd6e2aa2f0a7a)), closes [#57](https://github.com/nikhil-dev-utilities/git-explorer/issues/57)
+
 ## [0.1.1](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.1.0...v0.1.1) (2026-09-07)
 
 
