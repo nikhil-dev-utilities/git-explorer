@@ -200,9 +200,15 @@ depend on beats matching platform convention.
 certainly just configured one in `gh`'s YAML, and the shape is nested (a list of Hosts
 with per-Host overrides) which reads better in YAML than in TOML.
 
-**No config file is required.** A fresh install with no file works: an implicit
-`github.com` Host over the gh-cli Frontdoor, `ssh` protocol, no default Target so the
-clone dialog opens empty.
+**No config file is required.** A fresh install with no `hosts:` declared works
+without one: rather than always assuming `github.com`, git-explorer reads `gh`'s own
+`hosts.yml` (never the credential itself — only the host name and `git_protocol`
+fields) to discover which Host(s) the user is actually authenticated to, and uses
+those, gh-cli Frontdoor, no default Target so the clone dialog opens empty. This is
+what makes a GHE-only user (never logged into `github.com` at all) work out of the
+box. Falls back to the implicit `github.com` Host only if gh's own file is missing or
+unreadable. An explicit `hosts:` list in config.yaml always wins over discovery,
+even one that happens to declare the exact same Host discovery would have found.
 
 **Bootstrapped on first launch.** This one reverses an earlier decision: git-explorer
 now creates `$XDG_CONFIG_HOME/git-explorer` (or the `~/.config` fallback) itself if it

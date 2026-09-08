@@ -48,8 +48,9 @@ rather than failing partway through.
 
 ## Quick start
 
-With no config file at all, git-explorer runs against `github.com` through your `gh`
-login:
+With no config file at all, git-explorer works straight away against whatever
+Host(s) `gh` is already logged into — `github.com`, a GitHub Enterprise instance, or
+both:
 
 ```sh
 git-explorer
