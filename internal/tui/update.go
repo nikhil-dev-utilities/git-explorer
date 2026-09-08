@@ -58,6 +58,16 @@ func (m Model) handleCloneDialogKeyMsg(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.toggleOrgSubdir()
 	case tea.KeyEnter:
 		return m.confirmCloneDialog()
+	case tea.KeyBackspace:
+		return m.editCloneTarget(func(s string) string {
+			if len(s) == 0 {
+				return s
+			}
+			return s[:len(s)-1]
+		})
+	case tea.KeyRunes:
+		text := string(msg.Runes)
+		return m.editCloneTarget(func(s string) string { return s + text })
 	}
 	return m, nil
 }

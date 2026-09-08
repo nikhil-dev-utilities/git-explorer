@@ -83,3 +83,17 @@ func (m Model) leaveCloneDialog() Model {
 	m.mode = ModeBrowse
 	return m
 }
+
+// editCloneTarget edits the clone target path and recomputes the preview against the
+// new value — every listed destination must update live, the same guarantee
+// toggleOrgSubdir already gives the org-subdirectory toggle. DESIGN.md's clone dialog
+// mockup marks this field "pre-filled from config, editable"; before this it was
+// fixed at whatever New was constructed with for the whole session.
+//
+// Nothing else in ModeCloneDialog consumes plain typing (Tab already owns the
+// org-subdirectory toggle) — unlike Browse's always-focused filter (ADR-0006), there
+// is no competing meaning for a bare keystroke here.
+func (m Model) editCloneTarget(edit func(string) string) (Model, tea.Cmd) {
+	m.cloneTarget = edit(m.cloneTarget)
+	return m, m.dispatchClonePreview()
+}

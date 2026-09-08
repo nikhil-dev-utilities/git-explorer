@@ -124,6 +124,82 @@ func TestCloneDialog_ToggleOrgSubdirUpdatesEveryPathLive(t *testing.T) {
 	}
 }
 
+func TestCloneDialog_TypingEditsTargetAndRecomputesPreviewLive(t *testing.T) {
+	f := &fakeForge{
+		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},
+		repos:    cloneDialogRepoFixture(),
+	}
+	fp := &fakeClonePreview{}
+	tm := newTestModelWithPreview(t, f, fp.fn(), "/src")
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter}) // descend
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})   // tick "api"
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter}) // open dialog
+	time.Sleep(settleDelay)
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	m := finalModelAfter(t, tm)
+
+	if m.cloneTarget != "/src2" {
+		t.Fatalf("cloneTarget = %q, want %q after typing '2'", m.cloneTarget, "/src2")
+	}
+	if len(fp.calls) != 2 {
+		t.Fatalf("ClonePreviewFunc called %d times, want 2 (open + edit)", len(fp.calls))
+	}
+	if fp.calls[1].target != "/src2" {
+		t.Errorf("second call's target = %q, want %q", fp.calls[1].target, "/src2")
+	}
+	view := m.View()
+	if !strings.Contains(view, "/src2") {
+		t.Errorf("View() = %q, want it to show the edited target", view)
+	}
+}
+
+func TestCloneDialog_BackspaceEditsTarget(t *testing.T) {
+	f := &fakeForge{
+		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},
+		repos:    cloneDialogRepoFixture(),
+	}
+	fp := &fakeClonePreview{}
+	tm := newTestModelWithPreview(t, f, fp.fn(), "/src")
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	time.Sleep(settleDelay)
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyBackspace})
+	m := finalModelAfter(t, tm)
+
+	if m.cloneTarget != "/sr" {
+		t.Fatalf("cloneTarget = %q, want %q after one Backspace", m.cloneTarget, "/sr")
+	}
+}
+
+func TestCloneDialog_BackspaceOnEmptyTargetIsANoOp(t *testing.T) {
+	f := &fakeForge{
+		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},
+		repos:    cloneDialogRepoFixture(),
+	}
+	fp := &fakeClonePreview{}
+	tm := newTestModelWithPreview(t, f, fp.fn(), "") // zero-config: empty target
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	time.Sleep(settleDelay)
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyBackspace})
+	m := finalModelAfter(t, tm)
+
+	if m.cloneTarget != "" {
+		t.Fatalf("cloneTarget = %q, want still empty", m.cloneTarget)
+	}
+}
+
 func TestCloneDialog_ShowsAllThreeOutcomes(t *testing.T) {
 	f := &fakeForge{
 		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},

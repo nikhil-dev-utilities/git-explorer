@@ -47,6 +47,7 @@ var keymapTable = []keyBinding{
 	{"LeavePrompt", "Esc", "", "stay"},
 	{"LeavePrompt", "^c", "", "quit"},
 
+	{"CloneDialog", "type", "", "edit the target path"},
 	{"CloneDialog", "Tab", "", "toggle the org-subdirectory path"},
 	{"CloneDialog", "Enter", "", "confirm and start the Clone Run"},
 	{"CloneDialog", "Esc", "", "cancel, cloning nothing"},
