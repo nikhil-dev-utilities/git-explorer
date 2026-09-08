@@ -84,7 +84,7 @@ func defaultConfig() Config {
 
 // resolveLogPath applies the log path precedence documented in DESIGN.md:
 // --log-file flag > GIT_EXPLORER_LOG env var > log.path in the config file (already
-// parsed into fileLogPath by the time this runs) > the XDG state default.
+// parsed into fileLogPath by the time this runs) > the default, alongside config.yaml.
 func resolveLogPath(flags Flags, env Environ, fileLogPath string) string {
 	if flags.LogFile != "" {
 		return flags.LogFile
@@ -98,13 +98,20 @@ func resolveLogPath(flags Flags, env Environ, fileLogPath string) string {
 	return defaultLogPath(env)
 }
 
-// defaultLogPath is $XDG_STATE_HOME/git-explorer/git-explorer.log, falling back to
-// ~/.local/state/git-explorer/git-explorer.log when XDG_STATE_HOME is unset. Neither
-// the binary's own directory nor the working directory is ever considered.
+// defaultLogPath is $XDG_CONFIG_HOME/git-explorer/git-explorer.log, falling back to
+// ~/.config/git-explorer/git-explorer.log when XDG_CONFIG_HOME is unset — the same
+// directory config.yaml itself lives in (see the composition root's config-bootstrap
+// step, which creates this directory on first launch). Neither the binary's own
+// directory nor the working directory is ever considered.
+//
+// This used to be $XDG_STATE_HOME, per the usual XDG convention of keeping state
+// separate from config. Deliberately abandoned: a single directory a user can find
+// once and never think about again beat strict XDG purity, given how often "where's
+// the log" was the actual friction in practice.
 func defaultLogPath(env Environ) string {
-	stateHome := env.Getenv("XDG_STATE_HOME")
-	if stateHome == "" {
-		stateHome = filepath.Join(env.Getenv("HOME"), ".local", "state")
+	configHome := env.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		configHome = filepath.Join(env.Getenv("HOME"), ".config")
 	}
-	return filepath.Join(stateHome, "git-explorer", "git-explorer.log")
+	return filepath.Join(configHome, "git-explorer", "git-explorer.log")
 }

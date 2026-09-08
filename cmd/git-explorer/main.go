@@ -28,7 +28,7 @@ func main() {
 func run() error {
 	var flags config.Flags
 	flag.StringVar(&flags.ConfigPath, "config", "", "path to config file (default: $XDG_CONFIG_HOME/git-explorer/config.yaml)")
-	flag.StringVar(&flags.LogFile, "log-file", "", "path to log file (default: $XDG_STATE_HOME/git-explorer/git-explorer.log)")
+	flag.StringVar(&flags.LogFile, "log-file", "", "path to log file (default: alongside config.yaml, $XDG_CONFIG_HOME/git-explorer/git-explorer.log)")
 	flag.Parse()
 
 	// Checked before anything else is constructed: there is nothing useful the TUI
@@ -41,6 +41,10 @@ func run() error {
 
 	env := config.OSEnviron{}
 	flags.ConfigPath = resolveConfigPath(flags, env)
+
+	if err := bootstrapConfigDir(flags.ConfigPath); err != nil {
+		return err
+	}
 
 	fileBytes, err := os.ReadFile(flags.ConfigPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

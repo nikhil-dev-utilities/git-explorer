@@ -202,8 +202,17 @@ with per-Host overrides) which reads better in YAML than in TOML.
 
 **No config file is required.** A fresh install with no file works: an implicit
 `github.com` Host over the gh-cli Frontdoor, `ssh` protocol, no default Target so the
-clone dialog opens empty. There is no first-run wizard and we never write the file
-ourselves — config is something the user owns, like their Target directory.
+clone dialog opens empty.
+
+**Bootstrapped on first launch.** This one reverses an earlier decision: git-explorer
+now creates `$XDG_CONFIG_HOME/git-explorer` (or the `~/.config` fallback) itself if it
+doesn't exist, and writes a starter `config.yaml` there — header comment only, no
+active settings, so it resolves identically to the file-absent case until edited. An
+existing file is never touched. There is still no first-run wizard and no interactive
+prompt; this is a directory-and-empty-file bootstrap, not config generation. The
+earlier stance ("we never write the file ourselves") was strict user-ownership purity;
+in practice the friction of a first-run user not knowing where to even put a config
+file outweighed that purity.
 
 ```yaml
 clone:
@@ -211,7 +220,7 @@ clone:
   parallelism: 8
 
 log:
-  path: ~/.local/state/git-explorer/git-explorer.log
+  path: ~/.config/git-explorer/git-explorer.log
   level: info                    # debug | info | warn | error | off
   max_size_mb: 5
 
@@ -232,9 +241,13 @@ write corrupts the display. A file is therefore the *only* diagnostic channel, n
 convenience. Logging to stderr is refused outright rather than merely discouraged.
 
 **Where.** Neither the binary's directory nor the working directory is an appropriate
-place to write. The default is `$XDG_STATE_HOME/git-explorer/git-explorer.log`, falling
-back to `~/.local/state/git-explorer/` — XDG puts logs under *state*, which is neither
-config (user-owned input) nor cache (safe to delete). Overridden in precedence order:
+place to write. The default is `$XDG_CONFIG_HOME/git-explorer/git-explorer.log`,
+falling back to `~/.config/git-explorer/` — the same directory `config.yaml` itself
+lives in and is bootstrapped into on first launch (see Config, above). This
+deliberately abandons the stricter XDG convention of keeping logs under *state*,
+separate from config: one directory a user can find once and never think about again
+beat XDG purity, given how often "where's the log" was the actual friction. Overridden
+in precedence order:
 
 ```
 --log-file <path>  >  GIT_EXPLORER_LOG  >  log.path in config  >  XDG default

@@ -56,7 +56,7 @@ func TestLogPathPrecedence_DefaultAppliesWhenNothingElseIsSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := "/home/nikhil/.local/state/git-explorer/git-explorer.log"
+	want := "/home/nikhil/.config/git-explorer/git-explorer.log"
 	if cfg.Log.Path != want {
 		t.Errorf("Log.Path = %q, want the XDG default %q", cfg.Log.Path, want)
 	}

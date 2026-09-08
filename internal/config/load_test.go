@@ -22,7 +22,7 @@ func TestLoad_ZeroConfigDefaults(t *testing.T) {
 	if cfg.Log.MaxSizeMB != 5 {
 		t.Errorf("Log.MaxSizeMB = %d, want 5", cfg.Log.MaxSizeMB)
 	}
-	wantLogPath := "/home/nikhil/.local/state/git-explorer/git-explorer.log"
+	wantLogPath := "/home/nikhil/.config/git-explorer/git-explorer.log"
 	if cfg.Log.Path != wantLogPath {
 		t.Errorf("Log.Path = %q, want %q", cfg.Log.Path, wantLogPath)
 	}
@@ -47,14 +47,14 @@ func TestLoad_NilFileBytesIsNotAnError(t *testing.T) {
 	}
 }
 
-func TestLoad_XDGStateHomeWinsOverHOMEFallback(t *testing.T) {
-	env := MapEnviron{"XDG_STATE_HOME": "/xdg-state", "HOME": "/home/nikhil"}
+func TestLoad_XDGConfigHomeWinsOverHOMEFallback(t *testing.T) {
+	env := MapEnviron{"XDG_CONFIG_HOME": "/xdg-config", "HOME": "/home/nikhil"}
 	cfg, err := Load(Flags{}, env, nil)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := "/xdg-state/git-explorer/git-explorer.log"
+	want := "/xdg-config/git-explorer/git-explorer.log"
 	if cfg.Log.Path != want {
-		t.Errorf("Log.Path = %q, want %q (XDG_STATE_HOME set means HOME is never consulted)", cfg.Log.Path, want)
+		t.Errorf("Log.Path = %q, want %q (XDG_CONFIG_HOME set means HOME is never consulted)", cfg.Log.Path, want)
 	}
 }

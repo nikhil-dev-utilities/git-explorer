@@ -61,11 +61,15 @@ the current directory by default. `F1` shows the full keybinding list at any tim
 
 ### Configuration (optional)
 
-A config file at `$XDG_CONFIG_HOME/git-explorer/config.yaml` (or
-`~/.config/git-explorer/config.yaml`) lets you set a default clone target, add
-additional Hosts (including self-managed GitHub Enterprise installs), and tune
-parallelism and logging. See [DESIGN.md](./DESIGN.md#config) for the full schema.
-`--config <path>` and `--log-file <path>` override it from the command line.
+git-explorer creates `$XDG_CONFIG_HOME/git-explorer` (or `~/.config/git-explorer`)
+on first launch if it doesn't exist yet, along with an empty starter `config.yaml`
+there — it's inert until you edit it. Uncomment or add settings to set a default
+clone target, add additional Hosts (including self-managed GitHub Enterprise
+installs), and tune parallelism and logging. See [DESIGN.md](./DESIGN.md#config) for
+the full schema. `--config <path>` and `--log-file <path>` override it from the
+command line.
+
+The log file lives in that same directory (`git-explorer.log`), rotated by size.
 
 ## Keybindings
 
