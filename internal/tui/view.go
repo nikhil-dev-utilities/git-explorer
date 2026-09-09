@@ -310,6 +310,15 @@ func (m Model) browseFooterRows(width int) int {
 // listing), then the transient status line, if any. This is the one place in Browse
 // mode a user gets any on-screen hint of what to press, so it's never conditional
 // on anything: it's there on the very first frame and every frame after.
+//
+// Both renderKeyHintGrid and statusLine terminate their own last line with "\n" (by
+// design — see renderKeyHintGrid's doc comment), so the assembled string ends with
+// exactly one trailing newline. That has to come off: the panes above are already
+// sized to consume every row browseFooterRows accounted for, and a real terminal's
+// alt-screen buffer has no scrollback to absorb an extra line — it scrolls its own
+// fixed viewport instead, which pushes the *top* row (the pane borders' top edge)
+// out of view. Confirmed against a real terminal, not just reasoned about: this was
+// a genuine bug, not a defensive trim for a theoretical case.
 func (m Model) withBrowseFooter(pane string, width int) string {
 	var b strings.Builder
 	b.WriteString(pane)
@@ -318,7 +327,7 @@ func (m Model) withBrowseFooter(pane string, width int) string {
 	b.WriteString("\n")
 	b.WriteString(renderKeyHintGrid(m.currentBrowseKeyHints(), width))
 	b.WriteString(m.statusLine())
-	return b.String()
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // browseStatusLine is deliberately just the two things that change from moment to
