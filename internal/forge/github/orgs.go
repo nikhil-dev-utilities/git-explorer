@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
@@ -17,6 +18,8 @@ import (
 // paginates in the background and the caller can read pages as they arrive rather than
 // waiting for the whole thing.
 func (a *Adapter) ListOrgs(ctx context.Context, host forge.Host) (<-chan forge.OrgPage, error) {
+	slog.InfoContext(ctx, "listing orgs", "host", host.Name, "kind", host.Kind)
+
 	if err := a.checkAuth(ctx, host); err != nil {
 		return nil, err
 	}
@@ -31,6 +34,7 @@ func (a *Adapter) ListOrgs(ctx context.Context, host forge.Host) (<-chan forge.O
 	if err != nil {
 		return nil, err
 	}
+	slog.InfoContext(ctx, "listed orgs", "host", host.Name, "count", len(orgs))
 
 	page := make(chan forge.OrgPage, 1)
 	page <- forge.OrgPage{Orgs: orgs}

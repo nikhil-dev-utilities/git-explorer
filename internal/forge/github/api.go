@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,16 +23,28 @@ import (
 // with no POST route — silently POSTing to one 404s. Every call in this package goes
 // through this one function, so forcing GET here fixes all of them at once. See
 // https://github.com/nikhil-dev-utilities/git-explorer/issues/57.
+//
+// Every call is logged through slog.Default() — endpoint and outcome only, never
+// stdout/stderr content, which could carry response data (never credentials: gh
+// itself owns the token, this package never sees one). This is the single seam
+// every gh api call in this package goes through, so logging here covers all of
+// them without scattering call sites — see
+// https://github.com/nikhil-dev-utilities/git-explorer/issues/80.
 func (a *Adapter) runAPI(ctx context.Context, host forge.Host, endpoint string, extraArgs ...string) ([]byte, error) {
 	args := append([]string{"api", "--hostname", host.Name, "-X", "GET", endpoint}, extraArgs...)
 
 	res, runErr := a.run.Run(ctx, args...)
 	if runErr != nil {
-		return nil, notInstalledError(runErr)
+		err := notInstalledError(runErr)
+		slog.ErrorContext(ctx, "gh api call could not start", "host", host.Name, "endpoint", endpoint, "error", err)
+		return nil, err
 	}
 	if res.ExitCode != 0 {
-		return nil, classifyAPIFailure(endpoint, res.Stderr)
+		err := classifyAPIFailure(endpoint, res.Stderr)
+		slog.WarnContext(ctx, "gh api call failed", "host", host.Name, "endpoint", endpoint, "kind", err.Kind, "message", err.Message)
+		return nil, err
 	}
+	slog.DebugContext(ctx, "gh api call succeeded", "host", host.Name, "endpoint", endpoint, "response_bytes", len(res.Stdout))
 	return res.Stdout, nil
 }
 
@@ -46,7 +59,7 @@ var retryAfterPattern = regexp.MustCompile(`(?i)retry-after:\s*(\d+)`)
 // classified transient and carries a retry-after duration; anything else is
 // pane-scoped, distinct from the fatal not-authenticated/not-installed errors auth.go
 // owns.
-func classifyAPIFailure(endpoint string, stderr []byte) error {
+func classifyAPIFailure(endpoint string, stderr []byte) *forge.Error {
 	text := strings.TrimSpace(string(stderr))
 
 	if strings.Contains(text, rateLimitSignal) {

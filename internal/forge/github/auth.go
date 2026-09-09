@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
@@ -11,7 +12,8 @@ import (
 // checkAuth is a proactive auth-check probe, run before any data-fetching call for a
 // Host. It asks gh for a credential and then discards it immediately — the token bytes
 // are never stored, logged, or returned beyond this function, and are used only to
-// observe whether the call succeeded. See ADR-0004.
+// observe whether the call succeeded. See ADR-0004. Its own log lines name the Host
+// and outcome only, never the credential.
 //
 // This exists so an unauthenticated Host fails fast with a clear, specific message,
 // rather than surfacing as a generic failure from whichever data call happens to run
@@ -19,12 +21,16 @@ import (
 func (a *Adapter) checkAuth(ctx context.Context, host forge.Host) error {
 	res, runErr := a.run.Run(ctx, "auth", "token", "--hostname", host.Name)
 	if runErr != nil {
-		return notInstalledError(runErr)
+		err := notInstalledError(runErr)
+		slog.ErrorContext(ctx, "gh not installed", "host", host.Name, "error", err)
+		return err
 	}
 	if res.ExitCode != 0 {
+		slog.WarnContext(ctx, "not authenticated", "host", host.Name)
 		return notAuthenticatedError(host, res.Stderr)
 	}
 	// res.Stdout holds the credential here. It is deliberately never read.
+	slog.DebugContext(ctx, "authenticated", "host", host.Name)
 	return nil
 }
 

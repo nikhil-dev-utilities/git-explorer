@@ -98,20 +98,16 @@ func resolveLogPath(flags Flags, env Environ, fileLogPath string) string {
 	return defaultLogPath(env)
 }
 
-// defaultLogPath is $XDG_CONFIG_HOME/git-explorer/git-explorer.log, falling back to
-// ~/.config/git-explorer/git-explorer.log when XDG_CONFIG_HOME is unset — the same
-// directory config.yaml itself lives in (see the composition root's config-bootstrap
-// step, which creates this directory on first launch). Neither the binary's own
-// directory nor the working directory is ever considered.
+// defaultLogPath is $HOME/.logs/git-explorer/git-explorer.log — a fixed path, not
+// resolved against any XDG env var (unlike the config file's own location). Neither
+// the binary's own directory nor the working directory is ever considered.
 //
-// This used to be $XDG_STATE_HOME, per the usual XDG convention of keeping state
-// separate from config. Deliberately abandoned: a single directory a user can find
-// once and never think about again beat strict XDG purity, given how often "where's
-// the log" was the actual friction in practice.
+// This has moved twice: originally $XDG_STATE_HOME (strict XDG separation of state
+// from config), then $XDG_CONFIG_HOME (alongside config.yaml, on the reasoning that
+// one directory a user can find once beats XDG purity), now this literal path, by
+// explicit request. The containing directory does not need to be created ahead of
+// time — confirmed directly: lumberjack.Logger creates it (nested segments
+// included) on first write, the same way it creates the log file itself.
 func defaultLogPath(env Environ) string {
-	configHome := env.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" {
-		configHome = filepath.Join(env.Getenv("HOME"), ".config")
-	}
-	return filepath.Join(configHome, "git-explorer", "git-explorer.log")
+	return filepath.Join(env.Getenv("HOME"), ".logs", "git-explorer", "git-explorer.log")
 }

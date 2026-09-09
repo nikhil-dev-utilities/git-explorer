@@ -70,7 +70,8 @@ installs), and tune parallelism and logging. See [DESIGN.md](./DESIGN.md#config)
 the full schema. `--config <path>` and `--log-file <path>` override it from the
 command line.
 
-The log file lives in that same directory (`git-explorer.log`), rotated by size.
+The log file lives at `~/.logs/git-explorer/git-explorer.log` by default, rotated
+by size — `--log-file <path>` or `GIT_EXPLORER_LOG` override it.
 
 ## Keybindings
 

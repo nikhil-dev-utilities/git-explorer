@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"log/slog"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -43,7 +44,9 @@ func retryAfter(err error) time.Duration {
 // about Forge's contract or classify's own Kind-reading logic changes.
 func (m Model) applyOrgsFailure(err error) Model {
 	m.orgsLoaded = true
-	switch m.effectiveErrorKind(err) {
+	kind := m.effectiveErrorKind(err)
+	slog.Warn("org load failure", "kind", kind, "error", err)
+	switch kind {
 	case forge.ErrKindFatal:
 		m.mode = ModeFatal
 		m.fatalErr = err
@@ -57,7 +60,9 @@ func (m Model) applyOrgsFailure(err error) Model {
 
 func (m Model) applyReposFailure(err error) Model {
 	m.reposLoaded = true
-	switch m.effectiveErrorKind(err) {
+	kind := m.effectiveErrorKind(err)
+	slog.Warn("repo load failure", "kind", kind, "error", err)
+	switch kind {
 	case forge.ErrKindFatal:
 		m.mode = ModeFatal
 		m.fatalErr = err
