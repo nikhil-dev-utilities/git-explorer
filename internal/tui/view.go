@@ -352,10 +352,21 @@ func (m Model) browseStatusLine() string {
 // Orgs than fit in the pane's height. listHeightBudget is the pane box's total
 // content-row budget (header lines plus the list together); 0 means unbounded,
 // used only by the m.width == 0 test-only View() path.
+// renderFilterLine labels the always-live quick-filter row so it's never a bare,
+// unlabeled blank line — indistinguishable from a rendering glitch — when no filter
+// is typed yet. See issue #87: reported live as "the top pane line gets truncated,"
+// which was actually this line carrying no visible affordance at all when empty.
+func renderFilterLine(query string) string {
+	if query == "" {
+		return "search: (type to filter)"
+	}
+	return "search: " + query
+}
+
 func (m Model) viewOrgPane(listHeightBudget int) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "%s\n", m.orgFilter)
+	fmt.Fprintf(&b, "%s\n", renderFilterLine(m.orgFilter))
 	if m.orgAffiliation != AffiliationFilterAll {
 		fmt.Fprintf(&b, "affiliation: %s\n", affiliationFilterLabel(m.orgAffiliation))
 	}
@@ -409,7 +420,7 @@ func (m Model) viewRepoPane(detail repoDetail, listHeightBudget int) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "repos: %s · %d selected\n", m.currentOrg.Name, m.selectionCount())
-	fmt.Fprintf(&b, "%s\n", m.repoFilter)
+	fmt.Fprintf(&b, "%s\n", renderFilterLine(m.repoFilter))
 	fmt.Fprintf(&b, "archived: %s · fork: %s · visibility: %s · sort: %s\n",
 		triStateLabel(m.archivedFilter), triStateLabel(m.forkFilter),
 		visibilityFilterLabel(m.visibility), sortModeLabel(m.repoSort))
