@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.2.0...v0.3.0) (2026-09-09)
+
+
+### Features
+
+* auto-discover gh-authenticated host(s) for zero-config startup ([#71](https://github.com/nikhil-dev-utilities/git-explorer/issues/71)) ([de18187](https://github.com/nikhil-dev-utilities/git-explorer/commit/de18187d56c8ec79470a49e60a05b74902adb6db)), closes [#65](https://github.com/nikhil-dev-utilities/git-explorer/issues/65)
+* **cmd:** bootstrap config dir, starter config.yaml, and log location ([#69](https://github.com/nikhil-dev-utilities/git-explorer/issues/69)) ([4de0061](https://github.com/nikhil-dev-utilities/git-explorer/commit/4de0061f8f2654d94f62496e58d8a3c6e50fe548)), closes [#64](https://github.com/nikhil-dev-utilities/git-explorer/issues/64)
+* **tui:** render modal dialogs' actions as button-style widgets ([#74](https://github.com/nikhil-dev-utilities/git-explorer/issues/74)) ([06a1359](https://github.com/nikhil-dev-utilities/git-explorer/commit/06a1359fe3acfa31985b83d9a88604a43aa5c2e9)), closes [#68](https://github.com/nikhil-dev-utilities/git-explorer/issues/68)
+* **tui:** soften "not authenticated" from Fatal to pane-scoped for discovered hosts ([#73](https://github.com/nikhil-dev-utilities/git-explorer/issues/73)) ([932d757](https://github.com/nikhil-dev-utilities/git-explorer/commit/932d757210abf3540f3e47cd43450dc5763a5e18)), closes [#67](https://github.com/nikhil-dev-utilities/git-explorer/issues/67)
+* **tui:** split Browse's footer into a status line and a key-hint grid ([#72](https://github.com/nikhil-dev-utilities/git-explorer/issues/72)) ([afb22f4](https://github.com/nikhil-dev-utilities/git-explorer/commit/afb22f4c228a56c50c8a337b0283b41bb99a8785)), closes [#66](https://github.com/nikhil-dev-utilities/git-explorer/issues/66)
+
+
+### Bug Fixes
+
+* **tui:** trim withBrowseFooter's trailing newline, fixing missing top border ([#75](https://github.com/nikhil-dev-utilities/git-explorer/issues/75)) ([fba1944](https://github.com/nikhil-dev-utilities/git-explorer/commit/fba194440e9a3fc4febc8c2a1ff78ae95c45ff61))
+
 ## [0.2.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.1.1...v0.2.0) (2026-09-08)
 
 
