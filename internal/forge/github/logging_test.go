@@ -27,7 +27,7 @@ func TestRunAPI_LogsASuccessfulCall(t *testing.T) {
 	buf := captureLog(t)
 	fr := newFakeRunner()
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte("[]"), ExitCode: 0},
 	)
 	a := newWithRunner(fr)
@@ -49,7 +49,7 @@ func TestRunAPI_LogsAFailedCallWithoutLeakingStderrVerbatim(t *testing.T) {
 	buf := captureLog(t)
 	fr := newFakeRunner()
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stderr: []byte("some secret-shaped error detail"), ExitCode: 1},
 	)
 	a := newWithRunner(fr)

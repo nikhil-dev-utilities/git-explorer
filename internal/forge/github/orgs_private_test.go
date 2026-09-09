@@ -43,11 +43,11 @@ func registerPrivateHostFixtures(t *testing.T, fr *fakeRunner, hostName string) 
 		runResult{Stdout: readFixture(t, "organizations.json"), ExitCode: 0},
 	)
 	fr.on(
-		[]string{"api", "--hostname", hostName, "-X", "GET", "user/memberships/orgs", "-f", "per_page=100"},
+		[]string{"api", "--hostname", hostName, "-X", "GET", "user/memberships/orgs", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "user_memberships_orgs.json"), ExitCode: 0},
 	)
 	fr.on(
-		[]string{"api", "--hostname", hostName, "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+		[]string{"api", "--hostname", hostName, "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "user_repos_collaborator.json"), ExitCode: 0},
 	)
 }
@@ -134,9 +134,9 @@ func TestStreamOrgsPrivate_PaginatesUntilAShortPage(t *testing.T) {
 
 	fr := newFakeRunner()
 	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
@@ -181,9 +181,9 @@ func TestStreamOrgsPrivate_ObservesEarlyPageBeforeLaterPageRequested(t *testing.
 
 	fr := newFakeRunner()
 	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
@@ -244,9 +244,9 @@ func TestStreamOrgsPrivate_RateLimitIsTransientWithRetryAfter(t *testing.T) {
 	host := forge.Host{Name: "ghe.corp.internal", Kind: forge.HostPrivate}
 	fr := newFakeRunner()
 	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{
@@ -288,9 +288,9 @@ func TestStreamOrgsPrivate_LaterPageFailurePreservesEarlierPages(t *testing.T) {
 
 	fr := newFakeRunner()
 	fr.on([]string{"auth", "token", "--hostname", "ghe.corp.internal"}, runResult{ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/memberships/orgs", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})

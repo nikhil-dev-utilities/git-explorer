@@ -2,7 +2,6 @@ package github
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -54,14 +53,9 @@ type membershipEntry struct {
 // fetchMemberships returns the Orgs the user is a member or owner of. GitHub's
 // membership role is "admin" (organization owner) or "member" (regular member).
 func (a *Adapter) fetchMemberships(ctx context.Context, host forge.Host) ([]forge.Org, error) {
-	stdout, err := a.runAPI(ctx, host, "user/memberships/orgs", "-f", "per_page=100")
+	entries, err := fetchAllPages[membershipEntry](ctx, a, host, "user/memberships/orgs")
 	if err != nil {
 		return nil, err
-	}
-
-	var entries []membershipEntry
-	if err := json.Unmarshal(stdout, &entries); err != nil {
-		return nil, unmarshalError("user/memberships/orgs", err)
 	}
 
 	orgs := make([]forge.Org, 0, len(entries))
@@ -85,14 +79,9 @@ type repoOwnerEntry struct {
 // through outside-collaborator access — the case a membership-only view would miss
 // entirely.
 func (a *Adapter) fetchCollaboratorOrgs(ctx context.Context, host forge.Host) ([]string, error) {
-	stdout, err := a.runAPI(ctx, host, "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100")
+	entries, err := fetchAllPages[repoOwnerEntry](ctx, a, host, "user/repos", "-f", "affiliation=collaborator")
 	if err != nil {
 		return nil, err
-	}
-
-	var entries []repoOwnerEntry
-	if err := json.Unmarshal(stdout, &entries); err != nil {
-		return nil, unmarshalError("user/repos", err)
 	}
 
 	seen := make(map[string]bool, len(entries))

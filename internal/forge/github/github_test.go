@@ -14,11 +14,11 @@ func TestAdapter_ListOrgs_PublicHost(t *testing.T) {
 		Stdout: []byte("canary-token-must-never-leak"), ExitCode: 0,
 	})
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "-X", "GET", "user/memberships/orgs", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "user/memberships/orgs", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "user_memberships_orgs.json"), ExitCode: 0},
 	)
 	fr.on(
-		[]string{"api", "--hostname", "github.com", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "per_page=100"},
+		[]string{"api", "--hostname", "github.com", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: readFixture(t, "user_repos_collaborator.json"), ExitCode: 0},
 	)
 
