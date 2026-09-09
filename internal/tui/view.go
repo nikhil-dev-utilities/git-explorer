@@ -239,7 +239,7 @@ const (
 // no border or height constraint (there being no real terminal height to fill).
 func (m Model) viewBrowse() string {
 	if m.width == 0 {
-		pane := lipgloss.JoinHorizontal(lipgloss.Top, m.viewOrgPane(), " ", m.viewRepoPane(repoDetailFull))
+		pane := lipgloss.JoinHorizontal(lipgloss.Top, m.viewOrgPane(0), " ", m.viewRepoPane(repoDetailFull, 0))
 		return m.withBrowseFooter(pane, browseFooterFallbackWidth)
 	}
 
@@ -249,10 +249,11 @@ func (m Model) viewBrowse() string {
 
 	repoWidth := m.width - orgPaneWidth - paneGapCols - paneBorderCols*2
 	footerRows := m.browseFooterRows(m.width)
+	contentHeight := m.paneContentHeight(footerRows)
 
 	orgColor, repoColor := m.paneBorderColors()
-	orgCol := m.paneStyle(orgPaneWidth, orgColor, footerRows).Render(m.viewOrgPane())
-	repoCol := m.paneStyle(repoWidth, repoColor, footerRows).Render(m.viewRepoPane(detailForWidth(repoWidth)))
+	orgCol := m.paneStyle(orgPaneWidth, orgColor, footerRows).Render(m.viewOrgPane(contentHeight))
+	repoCol := m.paneStyle(repoWidth, repoColor, footerRows).Render(m.viewRepoPane(detailForWidth(repoWidth), contentHeight))
 
 	pane := lipgloss.JoinHorizontal(lipgloss.Top, orgCol, " ", repoCol)
 	return m.withBrowseFooter(pane, m.width)
@@ -272,18 +273,27 @@ func (m Model) paneBorderColors() (orgColor, repoColor lipgloss.Color) {
 }
 
 // paneStyle is the shared bordered-box style for a Browse pane: the given content
-// width, bordered and colored by focus, stretched to fill the terminal's full height
-// short of footerRows (the caller already knows exactly how many rows the footer
-// below it will take — see browseFooterRows) — only called once m.height is known
-// (the m.width == 0 branch above never reaches this).
+// width, bordered and colored by focus, stretched to fill paneContentHeight(footerRows)
+// — only called once m.height is known (the m.width == 0 branch above never reaches
+// this).
 func (m Model) paneStyle(width int, color lipgloss.Color, footerRows int) lipgloss.Style {
 	style := lipgloss.NewStyle().Width(width).Border(lipgloss.RoundedBorder()).BorderForeground(color)
+	return style.Height(m.paneContentHeight(footerRows))
+}
 
+// paneContentHeight is how many rows a Browse pane's box has for its own content —
+// header lines and the (possibly windowed) list together — short of footerRows, the
+// rows the footer below it will take (see browseFooterRows). Shared by paneStyle
+// (which constrains the box to this height) and viewBrowse (which passes it to
+// viewOrgPane/viewRepoPane so they know their own list-windowing budget) — the two
+// must agree, or the box's fixed height and what's actually rendered inside it drift
+// apart, which is exactly the bug class visibleWindow's own doc comment describes.
+func (m Model) paneContentHeight(footerRows int) int {
 	contentHeight := m.height - paneBorderRows - footerRows
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
-	return style.Height(contentHeight)
+	return contentHeight
 }
 
 // browseFooterFallbackWidth is used only when m.width == 0 (View() called directly,
@@ -337,7 +347,12 @@ func (m Model) browseStatusLine() string {
 	return fmt.Sprintf(" host: %s · %d selected", m.activeHost().Name, m.selectionCount())
 }
 
-func (m Model) viewOrgPane() string {
+// viewOrgPane renders the Org list windowed to keep m.orgCursor always visible —
+// see visibleWindow's own doc comment for why this matters once there are more
+// Orgs than fit in the pane's height. listHeightBudget is the pane box's total
+// content-row budget (header lines plus the list together); 0 means unbounded,
+// used only by the m.width == 0 test-only View() path.
+func (m Model) viewOrgPane(listHeightBudget int) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%s\n", m.orgFilter)
@@ -367,9 +382,18 @@ func (m Model) viewOrgPane() string {
 		return b.String()
 	}
 
-	for i, o := range visible {
+	maxRows := 0 // unbounded — see listHeightBudget's doc comment above
+	if listHeightBudget > 0 {
+		maxRows = listHeightBudget - strings.Count(b.String(), "\n")
+		if maxRows < 1 {
+			maxRows = 1
+		}
+	}
+	window, offset := visibleWindow(visible, m.orgCursor, maxRows)
+
+	for i, o := range window {
 		cursor := "  "
-		if i == m.orgCursor {
+		if offset+i == m.orgCursor {
 			cursor = "> "
 		}
 		fmt.Fprintf(&b, "%s%-20s %s\n", cursor, o.Name, o.Affiliation)
@@ -377,7 +401,11 @@ func (m Model) viewOrgPane() string {
 	return b.String()
 }
 
-func (m Model) viewRepoPane(detail repoDetail) string {
+// viewRepoPane renders the Repo list windowed to keep m.repoCursor always visible —
+// see viewOrgPane's doc comment; same reasoning, same visibleWindow helper.
+// listHeightBudget is the pane box's total content-row budget; 0 means unbounded,
+// used only by the m.width == 0 test-only View() path.
+func (m Model) viewRepoPane(detail repoDetail, listHeightBudget int) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "repos: %s · %d selected\n", m.currentOrg.Name, m.selectionCount())
@@ -405,9 +433,18 @@ func (m Model) viewRepoPane(detail repoDetail) string {
 		return b.String()
 	}
 
-	for i, r := range visible {
+	maxRows := 0 // unbounded — see listHeightBudget's doc comment above
+	if listHeightBudget > 0 {
+		maxRows = listHeightBudget - strings.Count(b.String(), "\n")
+		if maxRows < 1 {
+			maxRows = 1
+		}
+	}
+	window, offset := visibleWindow(visible, m.repoCursor, maxRows)
+
+	for i, r := range window {
 		cursor := "  "
-		if i == m.repoCursor {
+		if offset+i == m.repoCursor {
 			cursor = "> "
 		}
 		tick := "[ ]"
