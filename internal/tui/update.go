@@ -348,7 +348,7 @@ func (m Model) cycleFirstFacet() Model {
 func (m Model) cycleSort() Model {
 	switch m.focus {
 	case FocusOrgs:
-		m.orgSort = nextSortMode(m.orgSort) // no visible effect — see model.go
+		m.orgSort = nextOrgSortMode(m.orgSort)
 	case FocusRepos:
 		m.repoSort = nextSortMode(m.repoSort)
 	}

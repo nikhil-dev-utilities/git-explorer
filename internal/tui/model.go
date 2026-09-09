@@ -56,6 +56,8 @@ type SortMode int
 const (
 	SortByName SortMode = iota
 	SortByActivity
+	// SortByAffiliation is Org-only — see orgSort's own doc comment.
+	SortByAffiliation
 )
 
 // TriState is a hide/show/only cycle, used for the Repo pane's archived and fork
@@ -130,9 +132,10 @@ type Model struct {
 
 	orgFilter string
 	orgCursor int
-	orgSort   SortMode // no visible effect yet — Org has no activity field to
-	// sort by; the key still updates this so pressing it in
-	// either pane behaves consistently at the state level.
+	// orgSort cycles Name ⇄ Affiliation (issue #88) — Org has no activity-like field
+	// the way Repo has PushedAt, so it gets its own two-state cycle
+	// (nextOrgSortMode) rather than reusing Repo's Name ⇄ Activity one.
+	orgSort        SortMode
 	orgAffiliation AffiliationFilter
 
 	// currentOrg is the Org the Repo pane is (or was last) showing.

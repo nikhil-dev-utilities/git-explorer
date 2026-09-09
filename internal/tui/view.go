@@ -367,6 +367,7 @@ func (m Model) viewOrgPane(listHeightBudget int) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%s\n", renderFilterLine(m.orgFilter))
+	fmt.Fprintf(&b, "sort: %s\n", sortModeLabel(m.orgSort))
 	if m.orgAffiliation != AffiliationFilterAll {
 		fmt.Fprintf(&b, "affiliation: %s\n", affiliationFilterLabel(m.orgAffiliation))
 	}
@@ -379,7 +380,7 @@ func (m Model) viewOrgPane(listHeightBudget int) string {
 		b.WriteString("(showing what already loaded)\n")
 	}
 
-	visible := filterOrgsByAffiliation(m.orgs, m.orgFilter, m.orgAffiliation)
+	visible := sortOrgs(filterOrgsByAffiliation(m.orgs, m.orgFilter, m.orgAffiliation), m.orgSort)
 
 	if len(visible) == 0 {
 		switch {
@@ -524,8 +525,12 @@ func visibilityFilterLabel(v VisibilityFilter) string {
 }
 
 func sortModeLabel(s SortMode) string {
-	if s == SortByActivity {
+	switch s {
+	case SortByActivity:
 		return "activity"
+	case SortByAffiliation:
+		return "affiliation"
+	default:
+		return "name"
 	}
-	return "name"
 }
