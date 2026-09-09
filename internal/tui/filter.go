@@ -123,6 +123,29 @@ func sortRepos(repos []forge.Repo, mode SortMode) []forge.Repo {
 	return out
 }
 
+// sortOrgs returns a sorted copy — name (case-insensitive) or by Affiliation
+// (Owner, then Member, then Collaborator, then None — matching AffiliationFilter's
+// own cycle order in model.go), name-tiebroken within each Affiliation. The input is
+// never mutated.
+func sortOrgs(orgs []forge.Org, mode SortMode) []forge.Org {
+	out := make([]forge.Org, len(orgs))
+	copy(out, orgs)
+	switch mode {
+	case SortByAffiliation:
+		sort.SliceStable(out, func(i, j int) bool {
+			if out[i].Affiliation != out[j].Affiliation {
+				return out[i].Affiliation > out[j].Affiliation
+			}
+			return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+		})
+	default:
+		sort.SliceStable(out, func(i, j int) bool {
+			return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+		})
+	}
+	return out
+}
+
 func nextTriState(t TriState) TriState {
 	return (t + 1) % 3
 }
@@ -138,6 +161,15 @@ func nextAffiliationFilter(a AffiliationFilter) AffiliationFilter {
 func nextSortMode(s SortMode) SortMode {
 	if s == SortByName {
 		return SortByActivity
+	}
+	return SortByName
+}
+
+// nextOrgSortMode is Org's own two-state cycle — see orgSort's doc comment in
+// model.go for why it doesn't share nextSortMode with Repo.
+func nextOrgSortMode(s SortMode) SortMode {
+	if s == SortByName {
+		return SortByAffiliation
 	}
 	return SortByName
 }

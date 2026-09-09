@@ -38,7 +38,7 @@ var keymapTable = []keyBinding{
 	{"Browse", "^t", "alt-x", "Orgs: cycle Affiliation · Repos: cycle archived"},
 	{"Browse", "^f", "alt-f", "Repos: cycle fork"},
 	{"Browse", "^v", "alt-v", "Repos: cycle visibility"},
-	{"Browse", "^s", "alt-s", "cycle sort: name ⇄ last activity"},
+	{"Browse", "^s", "alt-s", "cycle sort: Orgs: name ⇄ Affiliation · Repos: name ⇄ last activity"},
 	{"Browse", "^y", "alt-h", "switch Host"},
 	{"Browse", "^r", "alt-r", "retry a pane-scoped load failure"},
 	{"Browse", "F1", "", "this help screen"},
