@@ -247,12 +247,13 @@ func (m Model) viewBrowse() string {
 		return "terminal too narrow\n"
 	}
 
-	repoWidth := m.width - orgPaneWidth - paneGapCols - paneBorderCols*2
+	orgWidth := m.orgPaneWidth()
+	repoWidth := m.width - orgWidth - paneGapCols - paneBorderCols*2
 	footerRows := m.browseFooterRows(m.width)
 	contentHeight := m.paneContentHeight(footerRows)
 
 	orgColor, repoColor := m.paneBorderColors()
-	orgCol := m.paneStyle(orgPaneWidth, orgColor, footerRows).Render(m.viewOrgPane(contentHeight))
+	orgCol := m.paneStyle(orgWidth, orgColor, footerRows).Render(m.viewOrgPane(contentHeight))
 	repoCol := m.paneStyle(repoWidth, repoColor, footerRows).Render(m.viewRepoPane(detailForWidth(repoWidth), contentHeight))
 
 	pane := lipgloss.JoinHorizontal(lipgloss.Top, orgCol, " ", repoCol)
@@ -270,6 +271,20 @@ func (m Model) paneBorderColors() (orgColor, repoColor lipgloss.Color) {
 		repoColor = focusedBorderColor
 	}
 	return orgColor, repoColor
+}
+
+// orgPaneWidth is the Org pane's current preset (orgPaneWidthPresets[m.orgPaneWidthIdx]),
+// clamped so the Repo pane never drops below minRepoPaneWidth — a wide preset chosen
+// on a wide terminal and then carried into a narrower one (or one preset up from where
+// it already barely fit) shrinks the Org pane back down automatically rather than
+// crushing the Repo pane. Only called once m.width is known to be >= tooNarrowWidth.
+func (m Model) orgPaneWidth() int {
+	width := orgPaneWidthPresets[m.orgPaneWidthIdx]
+	maxWidth := m.width - paneGapCols - paneBorderCols*2 - minRepoPaneWidth
+	if width > maxWidth {
+		width = maxWidth
+	}
+	return width
 }
 
 // paneStyle is the shared bordered-box style for a Browse pane: the given content

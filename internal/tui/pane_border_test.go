@@ -20,7 +20,7 @@ func TestPaneStyle_AppliesTheGivenBorderColor(t *testing.T) {
 	time.Sleep(settleDelay)
 	m := finalModelAfter(t, tm)
 
-	style := m.paneStyle(orgPaneWidth, focusedBorderColor, m.browseFooterRows(m.width))
+	style := m.paneStyle(m.orgPaneWidth(), focusedBorderColor, m.browseFooterRows(m.width))
 	if got := style.GetBorderTopForeground(); got != focusedBorderColor {
 		t.Errorf("border color = %v, want focusedBorderColor", got)
 	}
@@ -74,12 +74,12 @@ func TestPaneStyle_HeightFillsTerminalShortOfFooter(t *testing.T) {
 	time.Sleep(settleDelay)
 	m := finalModelAfter(t, tm)
 
-	footerRows := m.browseFooterRows(m.width) // 1 status line + 3 hint-grid rows at width 80
-	style := m.paneStyle(orgPaneWidth, focusedBorderColor, footerRows)
-	// 24 rows total - 2 border rows - 4 footer rows (1 status + 3 grid, no
-	// transient status line) = 18 content rows.
-	if got := style.GetHeight(); got != 18 {
-		t.Errorf("content height = %d, want 18 (24 - border(2) - footerRows(%d))", got, footerRows)
+	footerRows := m.browseFooterRows(m.width) // 1 status line + 4 hint-grid rows at width 80
+	style := m.paneStyle(m.orgPaneWidth(), focusedBorderColor, footerRows)
+	// 24 rows total - 2 border rows - 5 footer rows (1 status + 4 grid, no
+	// transient status line) = 17 content rows.
+	if got := style.GetHeight(); got != 17 {
+		t.Errorf("content height = %d, want 17 (24 - border(2) - footerRows(%d))", got, footerRows)
 	}
 }
 
@@ -90,10 +90,10 @@ func TestPaneStyle_ReservesAnExtraRowWhenStatusLinePresent(t *testing.T) {
 	m := finalModelAfter(t, tm)
 	m.transientErr = &forge.Error{Kind: forge.ErrKindTransient, Message: "rate limited"}
 
-	footerRows := m.browseFooterRows(m.width) // 1 status + 3 grid + 1 transient status
-	style := m.paneStyle(orgPaneWidth, focusedBorderColor, footerRows)
-	if got := style.GetHeight(); got != 17 {
-		t.Errorf("content height = %d, want 17 (24 - border(2) - footerRows(%d))", got, footerRows)
+	footerRows := m.browseFooterRows(m.width) // 1 status + 4 grid + 1 transient status
+	style := m.paneStyle(m.orgPaneWidth(), focusedBorderColor, footerRows)
+	if got := style.GetHeight(); got != 16 {
+		t.Errorf("content height = %d, want 16 (24 - border(2) - footerRows(%d))", got, footerRows)
 	}
 }
 

@@ -209,6 +209,11 @@ func (m Model) handleBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyCtrlS:
 		return m.cycleSort(), nil
+	// ^w is forbidden (ADR-0006: reserved for readline's kill-word) — ^g has no
+	// terminal/readline meaning of its own, paired with alt-w for the mnemonic, the
+	// same non-mnemonic-ctrl / mnemonic-alt pattern ^y/alt-h already uses.
+	case tea.KeyCtrlG:
+		return m.cycleOrgPaneWidth(), nil
 	case tea.KeyCtrlY:
 		return m.openHostSwitch(), nil
 	case tea.KeyCtrlR:
@@ -256,6 +261,8 @@ func (m Model) handleBrowseAltKey(r rune) (Model, tea.Cmd, bool) {
 		return m, nil, true
 	case 's': // alt-s: ^s's alias — cycle sort
 		return m.cycleSort(), nil, true
+	case 'w': // alt-w: ^g's alias — cycle Org pane width
+		return m.cycleOrgPaneWidth(), nil, true
 	case 'h': // alt-h: ^y's alias — switch Host
 		return m.openHostSwitch(), nil, true
 	case 'r': // alt-r: ^r's alias — retry a pane-scoped load failure
@@ -352,5 +359,15 @@ func (m Model) cycleSort() Model {
 	case FocusRepos:
 		m.repoSort = nextSortMode(m.repoSort)
 	}
+	return m
+}
+
+// cycleOrgPaneWidth advances through orgPaneWidthPresets, wrapping — available from
+// either pane (unlike the facet/sort cycles, which are pane-scoped) since it's a
+// whole-layout adjustment, not a per-pane filter setting. viewBrowse clamps the
+// actual rendered width against the terminal's current size, so this never needs to
+// know the terminal width itself.
+func (m Model) cycleOrgPaneWidth() Model {
+	m.orgPaneWidthIdx = (m.orgPaneWidthIdx + 1) % len(orgPaneWidthPresets)
 	return m
 }

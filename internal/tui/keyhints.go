@@ -39,6 +39,7 @@ func (m Model) currentBrowseKeyHints() []keyHint {
 		{"^f", "cycle fork"},
 		{"^v", "cycle vis"},
 		{"^s", "sort"},
+		{"^g", "pane width"},
 		{"^y", "switch host"},
 		{"^r", "retry"},
 		{"F1", "help"},

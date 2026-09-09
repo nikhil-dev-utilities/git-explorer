@@ -83,6 +83,7 @@ func TestKeymapTable_AltKeyAliasesMatchDesign(t *testing.T) {
 		"Browse|^f":    "alt-f",
 		"Browse|^v":    "alt-v",
 		"Browse|^s":    "alt-s",
+		"Browse|^g":    "alt-w",
 		"Browse|^y":    "alt-h",
 		"Browse|^r":    "alt-r",
 		"Fatal|^y":     "alt-h",
