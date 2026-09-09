@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
@@ -53,6 +54,7 @@ func (a *Adapter) streamOrgsPrivate(ctx context.Context, host forge.Host, out ch
 			// expected, displayed result on a Private Host, not an omission.
 			orgs[i] = forge.Org{Name: name, Host: host, Affiliation: affiliationByName[name]}
 		}
+		slog.InfoContext(ctx, "fetched orgs page", "host", host.Name, "page", page, "count", len(orgs), "more", more)
 		out <- forge.OrgPage{Orgs: orgs}
 
 		if !more {

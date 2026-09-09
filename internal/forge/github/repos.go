@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
@@ -38,6 +39,7 @@ func (a *Adapter) ListRepos(ctx context.Context, org forge.Org) ([]forge.Repo, e
 			Visibility: parseVisibility(e.Visibility),
 		}
 	}
+	slog.InfoContext(ctx, "listed repos", "org", org.Name, "host", org.Host.Name, "count", len(repos))
 	return repos, nil
 }
 

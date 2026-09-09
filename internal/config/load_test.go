@@ -22,7 +22,7 @@ func TestLoad_ZeroConfigDefaults(t *testing.T) {
 	if cfg.Log.MaxSizeMB != 5 {
 		t.Errorf("Log.MaxSizeMB = %d, want 5", cfg.Log.MaxSizeMB)
 	}
-	wantLogPath := "/home/nikhil/.config/git-explorer/git-explorer.log"
+	wantLogPath := "/home/nikhil/.logs/git-explorer/git-explorer.log"
 	if cfg.Log.Path != wantLogPath {
 		t.Errorf("Log.Path = %q, want %q", cfg.Log.Path, wantLogPath)
 	}
@@ -47,14 +47,17 @@ func TestLoad_NilFileBytesIsNotAnError(t *testing.T) {
 	}
 }
 
-func TestLoad_XDGConfigHomeWinsOverHOMEFallback(t *testing.T) {
+func TestLoad_LogPathDefaultIgnoresXDGConfigHome(t *testing.T) {
+	// The log path default is a fixed ~/.logs/git-explorer path, deliberately not
+	// resolved against any XDG env var (unlike the config file's own location) —
+	// setting XDG_CONFIG_HOME must not affect it.
 	env := MapEnviron{"XDG_CONFIG_HOME": "/xdg-config", "HOME": "/home/nikhil"}
 	cfg, err := Load(Flags{}, env, nil)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := "/xdg-config/git-explorer/git-explorer.log"
+	want := "/home/nikhil/.logs/git-explorer/git-explorer.log"
 	if cfg.Log.Path != want {
-		t.Errorf("Log.Path = %q, want %q (XDG_CONFIG_HOME set means HOME is never consulted)", cfg.Log.Path, want)
+		t.Errorf("Log.Path = %q, want %q (XDG_CONFIG_HOME must be ignored for the log path default)", cfg.Log.Path, want)
 	}
 }

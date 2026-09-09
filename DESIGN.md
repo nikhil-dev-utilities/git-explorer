@@ -244,7 +244,7 @@ clone:
   parallelism: 8
 
 log:
-  path: ~/.config/git-explorer/git-explorer.log
+  path: ~/.logs/git-explorer/git-explorer.log
   level: info                    # debug | info | warn | error | off
   max_size_mb: 5
 
@@ -265,16 +265,17 @@ write corrupts the display. A file is therefore the *only* diagnostic channel, n
 convenience. Logging to stderr is refused outright rather than merely discouraged.
 
 **Where.** Neither the binary's directory nor the working directory is an appropriate
-place to write. The default is `$XDG_CONFIG_HOME/git-explorer/git-explorer.log`,
-falling back to `~/.config/git-explorer/` — the same directory `config.yaml` itself
-lives in and is bootstrapped into on first launch (see Config, above). This
-deliberately abandons the stricter XDG convention of keeping logs under *state*,
-separate from config: one directory a user can find once and never think about again
-beat XDG purity, given how often "where's the log" was the actual friction. Overridden
-in precedence order:
+place to write. The default is `~/.logs/git-explorer/git-explorer.log` — a fixed
+path, not resolved against any XDG env var (unlike the config file's own location).
+This has moved twice before: originally `$XDG_STATE_HOME` (strict XDG separation of
+state from config), then alongside `config.yaml` under `$XDG_CONFIG_HOME` (one
+directory beats XDG purity), now this literal path, by explicit request. The
+directory doesn't need to exist ahead of time — `lumberjack` creates it, nested
+segments included, the same way it creates the log file itself. Overridden in
+precedence order:
 
 ```
---log-file <path>  >  GIT_EXPLORER_LOG  >  log.path in config  >  XDG default
+--log-file <path>  >  GIT_EXPLORER_LOG  >  log.path in config  >  ~/.logs/git-explorer/git-explorer.log
 ```
 
 **On by default**, at `info`. A user reporting "it hung listing orgs" can attach the file

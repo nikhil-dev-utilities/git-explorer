@@ -2,6 +2,7 @@ package clone
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 )
 
@@ -31,6 +32,8 @@ type Result struct {
 // with an error, or killed by the cancellation) — it does not wait on work that was
 // never started.
 func Run(ctx context.Context, target string, repos []Repo, orgSubdir bool, parallelism int) []Result {
+	slog.InfoContext(ctx, "clone run starting", "target", target, "repos", len(repos), "parallelism", parallelism, "org_subdir", orgSubdir)
+
 	results := make([]Result, len(repos))
 
 	type job struct {
@@ -86,5 +89,34 @@ dispatch:
 	}
 	wg.Wait()
 
+	logRunSummary(ctx, results)
 	return results
+}
+
+// logRunSummary counts Results by Outcome (Err takes precedence over whatever
+// Outcome a Repo classified as, matching Result.Err's own documented precedence),
+// then logs the summary at info and each individual failure at warn — a batch of a
+// few thousand successes producing a few thousand log lines each would defeat the
+// point of a summary existing at all.
+func logRunSummary(ctx context.Context, results []Result) {
+	var cloned, skipped, conflict, failed int
+	for _, r := range results {
+		switch {
+		case r.Err != nil:
+			failed++
+		case r.Outcome == OutcomeSkipped:
+			skipped++
+		case r.Outcome == OutcomeConflict:
+			conflict++
+		default:
+			cloned++
+		}
+	}
+	slog.InfoContext(ctx, "clone run finished", "cloned", cloned, "skipped", skipped, "conflict", conflict, "failed", failed)
+
+	for _, r := range results {
+		if r.Err != nil {
+			slog.WarnContext(ctx, "clone failed", "repo", r.Repo.Name, "org", r.Repo.Org, "dest", r.Dest, "error", r.Err)
+		}
+	}
 }
