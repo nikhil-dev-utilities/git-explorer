@@ -14,12 +14,14 @@ import (
 // orgsJSON builds the JSON body the organizations endpoint would return for the given
 // Org names — used instead of a static testdata file so pagination tests can build a
 // page of any size (including a full orgsPerPage page) without hand-writing large
-// fixtures.
-func orgsJSON(t *testing.T, names []string) []byte {
+// fixtures. IDs are assigned sequentially from startID (GET /organizations is
+// ID-ordered ascending), so a test can compute the since cursor the next page's fixture
+// must be registered under as startID+len(names)-1.
+func orgsJSON(t *testing.T, names []string, startID int64) []byte {
 	t.Helper()
-	entries := make([]map[string]string, len(names))
+	entries := make([]map[string]any, len(names))
 	for i, n := range names {
-		entries[i] = map[string]string{"login": n}
+		entries[i] = map[string]any{"login": n, "id": startID + int64(i)}
 	}
 	data, err := json.Marshal(entries)
 	if err != nil {
@@ -39,7 +41,7 @@ func namesN(prefix string, n int) []string {
 func registerPrivateHostFixtures(t *testing.T, fr *fakeRunner, hostName string) {
 	t.Helper()
 	fr.on(
-		[]string{"api", "--hostname", hostName, "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		[]string{"api", "--hostname", hostName, "-X", "GET", "organizations", "-f", "since=0", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{Stdout: readFixture(t, "organizations.json"), ExitCode: 0},
 	)
 	fr.on(
@@ -138,10 +140,14 @@ func TestStreamOrgsPrivate_PaginatesUntilAShortPage(t *testing.T) {
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
-		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=2", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
-		runResult{Stdout: orgsJSON(t, page2Names), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "since=0", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page1Names, 1), ExitCode: 0})
+	// The since cursor for the second request must be the last ID from page 1
+	// (1 + orgsPerPage - 1), never a page number — this is the regression this test
+	// exists to catch: passing page=2 here (as before the fix) is silently ignored by
+	// GET /organizations, which would just return page 1's data again forever.
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", fmt.Sprintf("since=%d", orgsPerPage), "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page2Names, orgsPerPage+1), ExitCode: 0})
 
 	a := newWithRunner(fr)
 	ch, err := a.ListOrgs(context.Background(), host)
@@ -172,6 +178,21 @@ func TestStreamOrgsPrivate_PaginatesUntilAShortPage(t *testing.T) {
 	if pages[1][0].Name != "org-last-a" {
 		t.Fatalf("page 2 does not contain page 2's data (got %q first)", pages[1][0].Name)
 	}
+
+	// This is the exact shape of the bug reported live against a real GHE instance:
+	// GET /organizations paginates via since (an org ID cursor), not page — passing
+	// page=N (silently ignored by that endpoint) made every request identical, so the
+	// same "since=0" call would have been sent again and again, forever, instead of
+	// exactly once.
+	since0Calls := 0
+	for _, call := range fr.snapshotCalls() {
+		if contains(call, "organizations") && contains(call, "since=0") {
+			since0Calls++
+		}
+	}
+	if since0Calls != 1 {
+		t.Fatalf("the since=0 request was made %d times, want exactly 1 — the cursor must advance, not repeat", since0Calls)
+	}
 }
 
 func TestStreamOrgsPrivate_ObservesEarlyPageBeforeLaterPageRequested(t *testing.T) {
@@ -185,14 +206,14 @@ func TestStreamOrgsPrivate_ObservesEarlyPageBeforeLaterPageRequested(t *testing.
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
-		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "since=0", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page1Names, 1), ExitCode: 0})
 	// page 2's call is gated: it will not be recorded in fr.calls, nor return, until
 	// this test explicitly closes `release` — proving deterministically (not by
 	// timing) that it has not been requested yet at the point we check.
 	fr.onGated(
-		[]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=2", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
-		runResult{Stdout: orgsJSON(t, []string{"org-last"}), ExitCode: 0},
+		[]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", fmt.Sprintf("since=%d", orgsPerPage), "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, []string{"org-last"}, orgsPerPage+1), ExitCode: 0},
 		release,
 	)
 
@@ -211,7 +232,7 @@ func TestStreamOrgsPrivate_ObservesEarlyPageBeforeLaterPageRequested(t *testing.
 	}
 
 	for _, call := range fr.snapshotCalls() {
-		if len(call) > 0 && contains(call, "page=2") {
+		if len(call) > 0 && contains(call, fmt.Sprintf("since=%d", orgsPerPage)) {
 			t.Fatal("page 2 was requested before the test released it")
 		}
 	}
@@ -248,7 +269,7 @@ func TestStreamOrgsPrivate_RateLimitIsTransientWithRetryAfter(t *testing.T) {
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "since=0", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{
 			Stderr:   []byte("gh: API rate limit exceeded for user ID 123. (HTTP 403)\nRetry-After: 45"),
 			ExitCode: 1,
@@ -292,9 +313,9 @@ func TestStreamOrgsPrivate_LaterPageFailurePreservesEarlierPages(t *testing.T) {
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
 	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "user/repos", "-f", "affiliation=collaborator", "-f", "page=1", "-f", "per_page=100"},
 		runResult{Stdout: []byte(`[]`), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=1", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
-		runResult{Stdout: orgsJSON(t, page1Names), ExitCode: 0})
-	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "page=2", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", "since=0", "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
+		runResult{Stdout: orgsJSON(t, page1Names, 1), ExitCode: 0})
+	fr.on([]string{"api", "--hostname", "ghe.corp.internal", "-X", "GET", "organizations", "-f", fmt.Sprintf("since=%d", orgsPerPage), "-f", fmt.Sprintf("per_page=%d", orgsPerPage)},
 		runResult{Stderr: []byte("HTTP 500: internal error"), ExitCode: 1})
 
 	a := newWithRunner(fr)

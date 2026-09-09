@@ -17,7 +17,7 @@ func TestFetchAllPages_StopsAfterAShortFirstPage(t *testing.T) {
 	fr := newFakeRunner()
 	fr.on(
 		[]string{"api", "--hostname", "github.com", "-X", "GET", "things", "-f", "page=1", "-f", "per_page=100"},
-		runResult{Stdout: orgsJSON(t, namesN("thing", 3)), ExitCode: 0},
+		runResult{Stdout: orgsJSON(t, namesN("thing", 3), 1), ExitCode: 0},
 	)
 	a := newWithRunner(fr)
 
@@ -41,11 +41,11 @@ func TestFetchAllPages_ContinuesPastAFullPageAndConcatenates(t *testing.T) {
 	fr := newFakeRunner()
 	fr.on(
 		[]string{"api", "--hostname", "github.com", "-X", "GET", "things", "-f", "page=1", "-f", "per_page=100"},
-		runResult{Stdout: orgsJSON(t, namesN("thing", defaultPerPage)), ExitCode: 0},
+		runResult{Stdout: orgsJSON(t, namesN("thing", defaultPerPage), 1), ExitCode: 0},
 	)
 	fr.on(
 		[]string{"api", "--hostname", "github.com", "-X", "GET", "things", "-f", "page=2", "-f", "per_page=100"},
-		runResult{Stdout: orgsJSON(t, namesN("more", 7)), ExitCode: 0},
+		runResult{Stdout: orgsJSON(t, namesN("more", 7), 1), ExitCode: 0},
 	)
 	a := newWithRunner(fr)
 
@@ -66,7 +66,7 @@ func TestFetchAllPages_PropagatesAFailureOnALaterPage(t *testing.T) {
 	fr := newFakeRunner()
 	fr.on(
 		[]string{"api", "--hostname", "github.com", "-X", "GET", "things", "-f", "page=1", "-f", "per_page=100"},
-		runResult{Stdout: orgsJSON(t, namesN("thing", defaultPerPage)), ExitCode: 0},
+		runResult{Stdout: orgsJSON(t, namesN("thing", defaultPerPage), 1), ExitCode: 0},
 	)
 	fr.on(
 		[]string{"api", "--hostname", "github.com", "-X", "GET", "things", "-f", "page=2", "-f", "per_page=100"},
@@ -89,11 +89,11 @@ func TestListRepos_PaginatesPastTheFirstHundred(t *testing.T) {
 	fr := newFakeRunner()
 	fr.on(
 		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "page=1", "-f", "per_page=100"},
-		runResult{Stdout: orgsJSON(t, namesN("repo", defaultPerPage)), ExitCode: 0},
+		runResult{Stdout: orgsJSON(t, namesN("repo", defaultPerPage), 1), ExitCode: 0},
 	)
 	fr.on(
 		[]string{"api", "--hostname", "github.com", "-X", "GET", "orgs/acme/repos", "-f", "page=2", "-f", "per_page=100"},
-		runResult{Stdout: orgsJSON(t, namesN("repo-page2", 12)), ExitCode: 0},
+		runResult{Stdout: orgsJSON(t, namesN("repo-page2", 12), 1), ExitCode: 0},
 	)
 	a := newWithRunner(fr)
 
