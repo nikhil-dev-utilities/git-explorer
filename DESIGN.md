@@ -104,6 +104,15 @@ drops, the Repo row sheds the date column first, then state badges, keeping the 
 longest. Below 60 columns the app renders a single "terminal too narrow" message rather
 than a broken layout.
 
+### Short terminals, long lists
+
+The Org and Repo panes window their list to the pane's actual height, keeping the
+cursor visible — centered when there's room, clamped to the list's start or end
+otherwise. This is what makes a Private Host with thousands of Orgs (the exact case
+progressive loading, above, is built for) actually navigable rather than just
+loadable: without it, the cursor still moves correctly but is essentially never
+inside the terminal's visible rows once the list is longer than the pane.
+
 ## Data flow
 
 ```
