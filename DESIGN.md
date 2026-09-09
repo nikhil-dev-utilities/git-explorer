@@ -71,6 +71,7 @@ lists both.
 | `^o` | `alt-a` | select all matching the current filter |
 | `^t` `^f` `^v` | `alt-x` `alt-f` `alt-v` | cycle archived / fork / visibility |
 | `^s` | `alt-s` | cycle sort: name ⇄ last activity |
+| `^g` | `alt-w` | cycle Org pane width |
 | `^y` | `alt-h` | switch Host |
 | `^r` | `alt-r` | reload the current pane |
 | `^c` | | quit |

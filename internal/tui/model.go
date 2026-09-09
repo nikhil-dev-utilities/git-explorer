@@ -137,6 +137,9 @@ type Model struct {
 	// (nextOrgSortMode) rather than reusing Repo's Name ⇄ Activity one.
 	orgSort        SortMode
 	orgAffiliation AffiliationFilter
+	// orgPaneWidthIdx indexes orgPaneWidthPresets (layout.go) — ^g/alt-w cycles it.
+	// Set to defaultOrgPaneWidthIdx by New; never persisted across sessions.
+	orgPaneWidthIdx int
 
 	// currentOrg is the Org the Repo pane is (or was last) showing.
 	currentOrg  forge.Org
@@ -217,6 +220,7 @@ func New(f forge.Forge, hosts []forge.Host, hostsUserConfigured bool, preview Cl
 		cloneTarget:         target,
 		cloneRun:            runner,
 		cloneParallelism:    parallelism,
+		orgPaneWidthIdx:     defaultOrgPaneWidthIdx,
 	}
 }
 

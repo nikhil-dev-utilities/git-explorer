@@ -95,6 +95,7 @@ this same table inside the app.
 | Browse | ^f | alt-f | Repos: cycle fork |
 | Browse | ^v | alt-v | Repos: cycle visibility |
 | Browse | ^s | alt-s | cycle sort: Orgs: name ⇄ Affiliation · Repos: name ⇄ last activity |
+| Browse | ^g | alt-w | cycle Org pane width |
 | Browse | ^y | alt-h | switch Host |
 | Browse | ^r | alt-r | retry a pane-scoped load failure |
 | Browse | F1 |  | this help screen |
