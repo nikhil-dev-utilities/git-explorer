@@ -48,7 +48,12 @@ func Run(ctx context.Context, target string, repos []Repo, orgSubdir bool, paral
 		results[i] = Result{Repo: repo, Dest: dest, Outcome: outcome, Err: err}
 		if err == nil && outcome == OutcomeCloned {
 			jobs = append(jobs, job{index: i, repo: repo, dest: dest})
+			continue
 		}
+		// Skipped/Conflict (or a classification error) never reach the goroutine
+		// below, so they get their progress line here instead — every Repo gets one
+		// as soon as its outcome is known, not just the ones that hit git.
+		logRepoOutcome(ctx, results[i])
 	}
 
 	if parallelism < 1 {
@@ -85,6 +90,7 @@ dispatch:
 			defer wg.Done()
 			defer func() { <-sem }()
 			results[j.index].Err = performClone(ctx, j.repo.CloneURL, j.dest)
+			logRepoOutcome(ctx, results[j.index])
 		}(j)
 	}
 	wg.Wait()
@@ -93,11 +99,24 @@ dispatch:
 	return results
 }
 
+// logRepoOutcome is the "progress per repo" line: logged the moment each Repo's
+// outcome is actually known — synchronously in the classification loop for
+// Skipped/Conflict, from inside the goroutine right after performClone returns for
+// everything else — rather than waiting for the whole batch to finish. This is what
+// makes tailing the log file during a long run show live progress instead of
+// silence until one final summary.
+func logRepoOutcome(ctx context.Context, r Result) {
+	if r.Err != nil {
+		slog.WarnContext(ctx, "clone failed", "repo", r.Repo.Name, "org", r.Repo.Org, "dest", r.Dest, "error", r.Err)
+		return
+	}
+	slog.InfoContext(ctx, "clone progress", "repo", r.Repo.Name, "org", r.Repo.Org, "dest", r.Dest, "outcome", r.Outcome)
+}
+
 // logRunSummary counts Results by Outcome (Err takes precedence over whatever
-// Outcome a Repo classified as, matching Result.Err's own documented precedence),
-// then logs the summary at info and each individual failure at warn — a batch of a
-// few thousand successes producing a few thousand log lines each would defeat the
-// point of a summary existing at all.
+// Outcome a Repo classified as, matching Result.Err's own documented precedence) and
+// logs the aggregate at info. Individual outcomes are already logged live as they
+// happen (logRepoOutcome) — this is a summary on top, not a second copy of every line.
 func logRunSummary(ctx context.Context, results []Result) {
 	var cloned, skipped, conflict, failed int
 	for _, r := range results {
@@ -113,10 +132,4 @@ func logRunSummary(ctx context.Context, results []Result) {
 		}
 	}
 	slog.InfoContext(ctx, "clone run finished", "cloned", cloned, "skipped", skipped, "conflict", conflict, "failed", failed)
-
-	for _, r := range results {
-		if r.Err != nil {
-			slog.WarnContext(ctx, "clone failed", "repo", r.Repo.Name, "org", r.Repo.Org, "dest", r.Dest, "error", r.Err)
-		}
-	}
 }

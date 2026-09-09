@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -67,6 +68,55 @@ func TestRun_LogsEachFailureIndividually(t *testing.T) {
 	}
 	if !strings.Contains(out, "failed=1") {
 		t.Errorf("log output = %q, want failed=1 in the summary", out)
+	}
+}
+
+// TestRun_LogsProgressPerRepo is the regression test for the feature this file
+// exists to prove: a "clone failed" summary only appeared after the whole batch
+// finished, and nothing at all was logged for Skipped/Conflict/successfully-cloned
+// Repos — tailing the log during a long run showed silence, then one final line.
+// Every Repo must now get its own line the moment its outcome is known.
+func TestRun_LogsProgressPerRepo(t *testing.T) {
+	buf := captureLog(t)
+	target := t.TempDir()
+
+	freshBare := newBareRepo(t)
+	freshRepo := Repo{Org: "acme", Name: "fresh", CloneURL: freshBare}
+
+	skippedRepo := Repo{Org: "acme", Name: "skipped", CloneURL: "https://example.invalid/acme/skipped.git"}
+	initRepoWithOrigin(t, TargetPath(target, skippedRepo, false), "https://example.invalid/acme/skipped.git")
+
+	conflictRepo := Repo{Org: "acme", Name: "conflict", CloneURL: "https://example.invalid/acme/conflict.git"}
+	if err := os.MkdirAll(TargetPath(target, conflictRepo, false), 0o755); err != nil {
+		t.Fatalf("seeding a conflicting non-git directory: %v", err)
+	}
+
+	Run(context.Background(), target, []Repo{freshRepo, skippedRepo, conflictRepo}, false, 8)
+
+	out := buf.String()
+	if n := strings.Count(out, "clone progress"); n != 3 {
+		t.Fatalf("log output = %q, want exactly 3 \"clone progress\" lines (one per Repo), got %d", out, n)
+	}
+	for _, name := range []string{"fresh", "skipped", "conflict"} {
+		if !strings.Contains(out, "repo="+name) {
+			t.Errorf("log output = %q, want a progress line for repo=%s", out, name)
+		}
+	}
+}
+
+// TestRun_FailureIsLoggedExactlyOnce guards against the summary loop this feature
+// removed being reintroduced alongside the new live per-Repo logging — a failure
+// must appear once, not twice.
+func TestRun_FailureIsLoggedExactlyOnce(t *testing.T) {
+	buf := captureLog(t)
+	target := t.TempDir()
+	failingRepo := Repo{Org: "acme", Name: "unreachable", CloneURL: filepath.Join(t.TempDir(), "does-not-exist.git")}
+
+	Run(context.Background(), target, []Repo{failingRepo}, false, 8)
+
+	out := buf.String()
+	if n := strings.Count(out, "clone failed"); n != 1 {
+		t.Fatalf("log output = %q, want exactly one \"clone failed\" line, got %d", out, n)
 	}
 }
 
