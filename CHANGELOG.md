@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.3.1...v0.4.0) (2026-09-09)
+
+
+### Features
+
+* **logging:** wire up real log statements, default path to ~/.logs/git-explorer ([#82](https://github.com/nikhil-dev-utilities/git-explorer/issues/82)) ([61cf364](https://github.com/nikhil-dev-utilities/git-explorer/commit/61cf364032f4effb0e3066d8bf6b11162dddbccf)), closes [#80](https://github.com/nikhil-dev-utilities/git-explorer/issues/80)
+
+
+### Bug Fixes
+
+* **github:** paginate ListRepos, fetchMemberships, fetchCollaboratorOrgs ([#86](https://github.com/nikhil-dev-utilities/git-explorer/issues/86)) ([1872541](https://github.com/nikhil-dev-utilities/git-explorer/commit/1872541354089fba506144a1014495c92b0966c7)), closes [#83](https://github.com/nikhil-dev-utilities/git-explorer/issues/83)
+* **tui:** give the Org pane a real ^s sort (name ⇄ Affiliation) ([#90](https://github.com/nikhil-dev-utilities/git-explorer/issues/90)) ([f65dfa6](https://github.com/nikhil-dev-utilities/git-explorer/commit/f65dfa68629e29bfe98c6487b0778a3e208b4fea)), closes [#88](https://github.com/nikhil-dev-utilities/git-explorer/issues/88)
+* **tui:** label the Org/Repo pane's quick-filter line ([#89](https://github.com/nikhil-dev-utilities/git-explorer/issues/89)) ([3f31d34](https://github.com/nikhil-dev-utilities/git-explorer/commit/3f31d3468a1352bf3a6b3203d02a62f0068489fc)), closes [#87](https://github.com/nikhil-dev-utilities/git-explorer/issues/87)
+
 ## [0.3.1](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.3.0...v0.3.1) (2026-09-09)
 
 
