@@ -269,6 +269,75 @@ func TestCloneDialog_EscReturnsToBrowseWithSelectionIntact(t *testing.T) {
 	}
 }
 
+// TestCloneDialog_GroupsByOutcomeWithCounts is a regression test for the richer
+// pre-flight preview: outcomes must render as three labeled groups with an
+// up-front summary count, not a flat per-Repo list a reader has to scan to
+// characterize.
+func TestCloneDialog_GroupsByOutcomeWithCounts(t *testing.T) {
+	f := &fakeForge{
+		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},
+		repos: map[string][]forge.Repo{
+			"acme": {
+				{Name: "cloned-one", Org: "acme"},
+				{Name: "cloned-two", Org: "acme"},
+				{Name: "skipped-one", Org: "acme"},
+				{Name: "conflict-one", Org: "acme"},
+			},
+		},
+	}
+	fp := &fakeClonePreview{byRepo: map[string]clone.Result{
+		"skipped-one":  {Outcome: clone.OutcomeSkipped, Dest: "/src/skipped-one"},
+		"conflict-one": {Outcome: clone.OutcomeConflict, Dest: "/src/conflict-one"},
+	}}
+	tm := newTestModelWithPreview(t, f, fp.fn(), "/src")
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyCtrlO})
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	m := finalModelAfter(t, tm)
+
+	view := m.View()
+	if !strings.Contains(view, "2 cloned · 1 skipped · 1 conflict") {
+		t.Errorf("View() = %q, want the up-front summary line \"2 cloned · 1 skipped · 1 conflict\"", view)
+	}
+	if !containsAll(view, "cloned:", "skipped:", "conflict:") {
+		t.Errorf("View() = %q, want three labeled group headers", view)
+	}
+
+	// The Cloned group's header must appear before both repos it contains, proving
+	// the list is actually grouped rather than merely labeled inline per row.
+	clonedHeaderIdx := strings.Index(view, "cloned:")
+	clonedOneIdx := strings.Index(view, "cloned-one")
+	clonedTwoIdx := strings.Index(view, "cloned-two")
+	if clonedHeaderIdx == -1 || clonedHeaderIdx > clonedOneIdx || clonedHeaderIdx > clonedTwoIdx {
+		t.Errorf("View() = %q, want the \"cloned:\" group header before its two repos", view)
+	}
+}
+
+// TestCloneDialog_ShowsParallelism is a regression test for the richer pre-flight
+// preview: parallelism must be visible before a Clone Run starts, not only
+// implicit in how many run concurrently.
+func TestCloneDialog_ShowsParallelism(t *testing.T) {
+	f := &fakeForge{
+		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},
+		repos:    cloneDialogRepoFixture(),
+	}
+	fp := &fakeClonePreview{}
+	tm := newTestModelWithPreview(t, f, fp.fn(), "/src") // newTestModelWithCloneRunner: parallelism 8
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	time.Sleep(settleDelay)
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	m := finalModelAfter(t, tm)
+
+	view := m.View()
+	if !strings.Contains(view, "parallelism: 8") {
+		t.Errorf("View() = %q, want the configured parallelism shown", view)
+	}
+}
+
 func containsAll(s string, substrs ...string) bool {
 	for _, sub := range substrs {
 		if !strings.Contains(s, sub) {

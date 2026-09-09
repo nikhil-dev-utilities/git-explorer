@@ -121,7 +121,10 @@ func hostSwitchButtons() []button {
 // from clonePreviewResults, which clone.TargetPath (via the injected
 // ClonePreviewFunc) computed, never a reimplementation of that logic here — plus its
 // pre-flight classification, updating live as the org-subdirectory toggle flips or
-// the target path itself is edited (see editCloneTarget).
+// the target path itself is edited (see editCloneTarget). Grouped by Outcome rather
+// than Selection order — the three possible actions (clone, leave alone, refuse)
+// read as three lists rather than a column a reader has to scan repo-by-repo to
+// characterize.
 func (m Model) viewCloneDialog() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "clone %d repos\n", m.selectionCount())
@@ -130,17 +133,32 @@ func (m Model) viewCloneDialog() string {
 	if m.cloneOrgSubdir {
 		subdir = "on"
 	}
-	fmt.Fprintf(&b, "[tab] org-subdirectory: %s\n\n", subdir)
+	fmt.Fprintf(&b, "[tab] org-subdirectory: %s · parallelism: %d\n\n", subdir, m.cloneParallelism)
 
 	if len(m.clonePreviewResults) == 0 {
 		b.WriteString("classifying...\n")
 		return b.String()
 	}
 
+	byOutcome := make(map[clone.Outcome][]clone.Result, 3)
 	for _, r := range m.clonePreviewResults {
-		fmt.Fprintf(&b, "%-30s %-10s %s\n", r.Repo.Name, r.Outcome, r.Dest)
+		byOutcome[r.Outcome] = append(byOutcome[r.Outcome], r)
 	}
-	b.WriteString("\n")
+	fmt.Fprintf(&b, "%d cloned · %d skipped · %d conflict\n\n",
+		len(byOutcome[clone.OutcomeCloned]), len(byOutcome[clone.OutcomeSkipped]), len(byOutcome[clone.OutcomeConflict]))
+
+	for _, outcome := range []clone.Outcome{clone.OutcomeCloned, clone.OutcomeSkipped, clone.OutcomeConflict} {
+		results := byOutcome[outcome]
+		if len(results) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "%s:\n", outcome)
+		for _, r := range results {
+			fmt.Fprintf(&b, "  %-30s %s\n", r.Repo.Name, r.Dest)
+		}
+		b.WriteString("\n")
+	}
+
 	b.WriteString(renderButtons(cloneDialogButtons()))
 	b.WriteString("\n")
 	return b.String()
