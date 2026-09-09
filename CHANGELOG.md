@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.3.0...v0.3.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **tui:** window the Org/Repo pane lists so the cursor stays visible ([#78](https://github.com/nikhil-dev-utilities/git-explorer/issues/78)) ([a44c37e](https://github.com/nikhil-dev-utilities/git-explorer/commit/a44c37e00fc8173dcc80e9dc37dc027dd46d8bfa))
+
 ## [0.3.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.2.0...v0.3.0) (2026-09-09)
 
 
