@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.4.1...v0.5.0) (2026-09-09)
+
+
+### Features
+
+* **clone:** log per-repo progress during a Clone Run, not just start/summary ([#100](https://github.com/nikhil-dev-utilities/git-explorer/issues/100)) ([f90cbb2](https://github.com/nikhil-dev-utilities/git-explorer/commit/f90cbb2f3a873b4c9e589d29c320c4afbe633b32)), closes [#99](https://github.com/nikhil-dev-utilities/git-explorer/issues/99)
+* **tui:** group the clone dialog preview by Outcome, show parallelism ([#98](https://github.com/nikhil-dev-utilities/git-explorer/issues/98)) ([4a21975](https://github.com/nikhil-dev-utilities/git-explorer/commit/4a219753823dcd3804f6ee9fa6be5f4dcf06ce0a)), closes [#97](https://github.com/nikhil-dev-utilities/git-explorer/issues/97)
+* **tui:** make the Org pane resizable, larger by default ([#95](https://github.com/nikhil-dev-utilities/git-explorer/issues/95)) ([8eeb74b](https://github.com/nikhil-dev-utilities/git-explorer/commit/8eeb74be4c5023622dd75ba2f1f5f28e7dc12194)), closes [#94](https://github.com/nikhil-dev-utilities/git-explorer/issues/94)
+
 ## [0.4.1](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.4.0...v0.4.1) (2026-09-09)
 
 
