@@ -69,9 +69,15 @@ func (m Model) handleClonePreview(msg clonePreviewMsg) (Model, tea.Cmd) {
 }
 
 // toggleOrgSubdir flips the org-subdirectory toggle and recomputes the preview —
-// every listed path must update live, per the PRD. It always starts off (TriHide-like
-// default) and is never remembered between Clone Runs, per ADR-0007: New always
-// constructs a Model with it false.
+// every listed path must update live, per the PRD. It starts off (TriHide-like
+// default) at launch, since New always constructs a Model with it false — but,
+// confirmed as deliberate rather than an oversight: neither this nor cloneTarget
+// (see editCloneTarget) resets between separate Clone Runs within one running
+// session. Whatever you last set either to is what the next batch starts from too,
+// on purpose — convenient for cloning several batches to the same non-default
+// location in one sitting. Only a fresh launch (a new Model via New) resets either
+// one. ADR-0007 is about not caching Org/Repo lists *across launches*; it doesn't
+// speak to this in-session persistence one way or the other.
 func (m Model) toggleOrgSubdir() (Model, tea.Cmd) {
 	m.cloneOrgSubdir = !m.cloneOrgSubdir
 	return m, m.dispatchClonePreview()
@@ -86,9 +92,11 @@ func (m Model) leaveCloneDialog() Model {
 
 // editCloneTarget edits the clone target path and recomputes the preview against the
 // new value — every listed destination must update live, the same guarantee
-// toggleOrgSubdir already gives the org-subdirectory toggle. DESIGN.md's clone dialog
-// mockup marks this field "pre-filled from config, editable"; before this it was
-// fixed at whatever New was constructed with for the whole session.
+// toggleOrgSubdir already gives the org-subdirectory toggle, including that edit
+// sticking around for the next Clone Run too, on purpose — see toggleOrgSubdir's own
+// doc comment. DESIGN.md's clone dialog mockup marks this field "pre-filled from
+// config, editable"; before this it was fixed at whatever New was constructed with
+// for the whole session.
 //
 // Nothing else in ModeCloneDialog consumes plain typing (Tab already owns the
 // org-subdirectory toggle) — unlike Browse's always-focused filter (ADR-0006), there
