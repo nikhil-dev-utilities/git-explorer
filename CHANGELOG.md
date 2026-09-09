@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.4.0...v0.4.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **github:** paginate GET /organizations with since=, not page= ([#92](https://github.com/nikhil-dev-utilities/git-explorer/issues/92)) ([7c1340d](https://github.com/nikhil-dev-utilities/git-explorer/commit/7c1340d7ab212466a847bb396b86a72a99761063)), closes [#91](https://github.com/nikhil-dev-utilities/git-explorer/issues/91)
+
 ## [0.4.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.3.1...v0.4.0) (2026-09-09)
 
 
