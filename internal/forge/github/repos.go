@@ -2,7 +2,6 @@ package github
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -13,14 +12,9 @@ import (
 // Repo with the fields the Repo pane needs to render and filter: name, PushedAt,
 // Archived, Fork, and Visibility.
 func (a *Adapter) ListRepos(ctx context.Context, org forge.Org) ([]forge.Repo, error) {
-	stdout, err := a.runAPI(ctx, org.Host, "orgs/"+org.Name+"/repos", "-f", "per_page=100")
+	entries, err := fetchAllPages[repoEntry](ctx, a, org.Host, "orgs/"+org.Name+"/repos")
 	if err != nil {
 		return nil, err
-	}
-
-	var entries []repoEntry
-	if err := json.Unmarshal(stdout, &entries); err != nil {
-		return nil, unmarshalError("orgs/"+org.Name+"/repos", err)
 	}
 
 	repos := make([]forge.Repo, len(entries))
