@@ -1,6 +1,6 @@
 [
-  { "login": "acme" },
-  { "login": "widgets-inc" },
-  { "login": "globex" },
-  { "login": "initech" }
+  { "login": "acme", "id": 1 },
+  { "login": "widgets-inc", "id": 2 },
+  { "login": "globex", "id": 3 },
+  { "login": "initech", "id": 4 }
 ]
