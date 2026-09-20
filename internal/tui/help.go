@@ -53,6 +53,8 @@ var keymapTable = []keyBinding{
 	{"CloneDialog", "↑/↓, j/k", "", "move in the folder browser"},
 	{"CloneDialog", "Enter", "", "open the highlighted folder"},
 	{"CloneDialog", "←, h, Backspace", "", "go up a folder"},
+	{"CloneDialog", "/", "", "type a path to jump to (~, absolute or relative); Enter go · Esc cancel"},
+	{"CloneDialog", "n", "", "new folder in this one, made when cloning; Enter create · Esc cancel"},
 	{"CloneDialog", "Tab", "", "toggle the org-subdirectory path"},
 	{"CloneDialog", "c", "", "start the Clone Run"},
 	{"CloneDialog", "Esc", "", "cancel, cloning nothing"},

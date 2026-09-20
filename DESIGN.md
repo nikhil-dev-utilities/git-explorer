@@ -156,8 +156,16 @@ completes, then reports per-Repo Outcomes with failures retryable.
 The clone screen (built on Glyph, `internal/glyphclone`) asks about the Target and the
 org-level directory every time; the Target is the user's hierarchy and we do not invent
 levels in it. The Target is chosen in a folder browser (directories only, dotdirs hidden,
-`..` always available; a configured Target that does not exist yet lists as empty and is
-created by the clone). The preview redraws live as the folder or the toggle changes.
+`..` always available). `/` opens a prompt to type a path to jump to (`~`, absolute, or
+relative to the current folder, prefilled with the current folder); `n` prompts for a new
+folder name inside the current one. Both are the same modal prompt and take effect on
+Enter; Esc cancels.
+
+A folder that does not exist yet is a valid Target: it is only marked "new folder, created
+when cloning" and is created by the clone itself (`git clone` parents are made as needed),
+so cancelling the screen never leaves an empty directory behind. Every Repo in the batch
+lands under the chosen folder. A path that is a file, or sits under one, is rejected in
+the prompt. The preview redraws live as the folder or the toggle changes.
 
 ```
 Clone 4 repos → ~/src
@@ -170,7 +178,7 @@ Clone 4 repos → ~/src
 │                         ││! tf-modules                      │
 ╰─────────────────────────╯╰──────────────────────────────────╯
 org subdirectory: off · parallelism: 8
-enter open · ←/backspace up · tab org subdirectory · c clone · esc cancel
+enter open · ← up · / go to path · n new folder · tab org subdirectory · c clone · esc cancel
 ```
 
 Pressing `c` switches the same screen to a live log: a spinner, progress bar and one line
