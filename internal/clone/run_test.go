@@ -138,3 +138,37 @@ func TestRun_ParallelismBoundNeverExceeded(t *testing.T) {
 		t.Error("observed 0 concurrent clones — the poller likely isn't sampling during real work, this test isn't verifying anything")
 	}
 }
+
+func TestRunProgress_EmitsStartThenDonePerClonedRepoAndOneDonePerOther(t *testing.T) {
+	target := t.TempDir()
+	fresh := Repo{Org: "acme", Name: "fresh", CloneURL: newBareRepo(t)}
+	conflict := Repo{Org: "acme", Name: "conflict", CloneURL: "https://example.invalid/acme/conflict.git"}
+	if err := os.MkdirAll(filepath.Join(TargetPath(target, conflict, false), "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	var events []Event
+	RunProgress(context.Background(), target, []Repo{fresh, conflict}, false, 2, func(e Event) {
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, e)
+	})
+
+	var freshSeq []bool
+	dones := map[string]Outcome{}
+	for _, e := range events {
+		if e.Result.Repo.Name == "fresh" {
+			freshSeq = append(freshSeq, e.Done)
+		}
+		if e.Done {
+			dones[e.Result.Repo.Name] = e.Result.Outcome
+		}
+	}
+	if len(freshSeq) != 2 || freshSeq[0] || !freshSeq[1] {
+		t.Errorf("fresh events Done sequence = %v, want [false true]", freshSeq)
+	}
+	if len(events) != 3 || dones["conflict"] != OutcomeConflict || dones["fresh"] != OutcomeCloned {
+		t.Errorf("events = %+v", events)
+	}
+}
