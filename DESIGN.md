@@ -153,25 +153,34 @@ commit to the run:
 A Clone Run never writes into an occupied path and never aborts on first failure. It
 completes, then reports per-Repo Outcomes with failures retryable.
 
-The dialog asks about the org-level directory every time and remembers nothing — the
-Target is the user's hierarchy and we do not invent levels in it. The path list redraws
-live as the toggle changes.
+The clone screen (built on Glyph, `internal/glyphclone`) asks about the Target and the
+org-level directory every time; the Target is the user's hierarchy and we do not invent
+levels in it. The Target is chosen in a folder browser (directories only, dotdirs hidden,
+`..` always available; a configured Target that does not exist yet lists as empty and is
+created by the clone). The preview redraws live as the folder or the toggle changes.
 
 ```
-┌─ Clone 4 repos ─────────────────────────┐
-│ target: ~/src                           │   ← pre-filled from config, editable
-│ [ ] put clones under an acme/ dir       │   ← always starts unticked
-│                                         │
-│ + acme/tf-network  → ~/src/tf-network   │
-│ + acme/tf-vpc      → ~/src/tf-vpc       │
-│ = acme/tf-dns      already cloned, skip │
-│ ! acme/tf-modules  path in use by       │
-│                    globex/tf-modules    │
-│                                         │
-│ 2 to clone · 1 skipped · 1 conflict     │
-│ [enter] clone  [space] toggle  [esc]    │
-└─────────────────────────────────────────┘
+Clone 4 repos → ~/src
+╭─ Choose target folder ──╮╭─ Preview ────────────────────────╮
+│> ../                    ││2 to clone · 1 skipped · 1 conflict│
+│  work/                  ││                                  │
+│  oss/                   ││+ tf-network                      │
+│                         ││+ tf-vpc                          │
+│                         ││= tf-dns                          │
+│                         ││! tf-modules                      │
+╰─────────────────────────╯╰──────────────────────────────────╯
+org subdirectory: off · parallelism: 8
+enter open · ←/backspace up · tab org subdirectory · c clone · esc cancel
 ```
+
+Pressing `c` switches the same screen to a live log: a spinner, progress bar and one line
+per Repo as its clone starts and finishes (`→` cloning, `✓` cloned, `=` skipped, `!`
+conflict, `✗` failed). When it finishes the summary offers `r` to retry only the failures.
+The log shows per-Repo status lines, not raw `git clone` output.
+
+Bubbletea and Glyph cannot share a terminal, so the shell suspends itself (`tea.Exec`),
+runs the clone screen, and resumes with the chosen Target and whether a run happened.
+This is the first screen of the incremental Glyph port; see docs/glyph-feasibility.md.
 
 Execution shells out to `git` (ADR-0003), bounded at 8 parallel by default. Protocol is
 per-Host config, `ssh` by default, seeded from `gh config get git_protocol` when the
@@ -200,7 +209,8 @@ internal/forge/
     fd_ghcli.go     v1 ships this one only
 internal/clone/     pre-flight Outcome check + parallel `git clone`
 internal/config/    hostnames, protocol, default Targets. No secrets — ADR-0004.
-internal/tui/       bubbletea model, two panes, filter, dialogs
+internal/tui/       bubbletea model, two panes, filter, dialogs (clone screen excepted)
+internal/glyphclone/  Glyph clone screen: folder browser, preview, live clone log
 ```
 
 GitLab is deferred and may deserve its own model entirely; the port is shaped honestly on
