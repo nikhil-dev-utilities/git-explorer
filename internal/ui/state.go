@@ -28,6 +28,7 @@ const (
 	modeHelp
 	modeFatal
 	modeClone
+	modeFilter // typing into the focused pane's filter; every other key is text
 )
 
 type focus int
@@ -36,6 +37,11 @@ const (
 	focusOrgs focus = iota
 	focusRepos
 )
+
+type cachedRepos struct {
+	repos []forge.Repo
+	at    time.Time
+}
 
 // Deps is everything the UI needs from outside; it never imports a Forge implementation.
 type Deps struct {
@@ -86,8 +92,12 @@ type state struct {
 	reposLoaded bool
 	reposErr    error
 	repoGen     int
-	repoFL      *glyph.FilterListC[repoRow]
-	selected    map[string]bool
+	// repoCache holds each Org's Repos for this session only (ADR-0009): reopening an
+	// Org is instant, r/F5 refetches, and the title shows how old the data is.
+	repoCache    map[string]cachedRepos
+	repoLoadedAt time.Time
+	repoFL       *glyph.FilterListC[repoRow]
+	selected     map[string]bool
 
 	fatalErr     error
 	transientErr error
@@ -106,8 +116,9 @@ type state struct {
 	helpCursor int
 	helpH      int16
 	leaveText  string
+	pending    func() // what the leave prompt's "discard" continues with
 
-	// filter text per pane, edited by the always-focused text handler
+	// filter text per pane, edited while modeFilter is active
 	query [2]string
 	cur   [2]int
 	text  [2]*riffkey.TextHandler
@@ -152,6 +163,7 @@ func newState(d Deps, spawn, apply func(func()), refresh func()) *state {
 		d:           d,
 		hosts:       d.Hosts,
 		cloneTarget: d.CloneTarget,
+		repoCache:   map[string]cachedRepos{},
 		orgWidthIdx: defaultOrgWidthIdx,
 		archived:    triHide,
 		fork:        triHide,
@@ -207,12 +219,34 @@ func (s *state) clearQuery(f focus) {
 	s.sync()
 }
 
-// handleText edits the focused pane's filter (ADR-0006: the filter is always live).
+// handleText edits the focused pane's filter; only meaningful in modeFilter (ADR-0009).
 func (s *state) handleText(k riffkey.Key) bool {
-	if s.mode != modeBrowse {
+	if s.mode != modeFilter {
 		return false
 	}
 	return s.text[s.focus].HandleKey(k)
+}
+
+// startFilter enters filter mode for the focused pane.
+func (s *state) startFilter() {
+	if s.mode == modeBrowse {
+		s.setMode(modeFilter)
+	}
+}
+
+// acceptFilter leaves filter mode keeping the filter applied.
+func (s *state) acceptFilter() {
+	if s.mode == modeFilter {
+		s.setMode(modeBrowse)
+	}
+}
+
+// cancelFilter clears the focused pane's filter and leaves filter mode.
+func (s *state) cancelFilter() {
+	if s.mode == modeFilter {
+		s.clearQuery(s.focus)
+		s.setMode(modeBrowse)
+	}
 }
 
 func (s *state) resize(w, h int) {
@@ -296,7 +330,10 @@ func (s *state) loadOrgs() {
 	})
 }
 
-// loadRepos fetches the current Org's Repos, lazily and never cached.
+func (s *state) cacheKey(o forge.Org) string { return s.activeHost().Name + "/" + o.Name }
+
+// loadRepos fetches the current Org's Repos from the Forge. It runs only on demand:
+// the first time an Org is opened this session, or on an explicit reload.
 func (s *state) loadRepos() {
 	s.repoGen++
 	gen := s.repoGen
@@ -313,10 +350,25 @@ func (s *state) loadRepos() {
 				s.reposFailed(err)
 				return
 			}
-			s.repoAll, s.reposLoaded = repos, true
+			s.repoAll, s.reposLoaded, s.repoLoadedAt = repos, true, s.now()
+			s.repoCache[s.cacheKey(org)] = cachedRepos{repos: repos, at: s.repoLoadedAt}
+			s.pruneSelection()
 			s.rebuildRepos()
 		})
 	})
+}
+
+// pruneSelection drops ticks for Repos that no longer exist after a reload.
+func (s *state) pruneSelection() {
+	present := make(map[string]bool, len(s.repoAll))
+	for _, r := range s.repoAll {
+		present[r.Name] = true
+	}
+	for name := range s.selected {
+		if !present[name] {
+			delete(s.selected, name)
+		}
+	}
 }
 
 func classify(err error) forge.ErrorKind {
@@ -381,7 +433,7 @@ func (s *state) reposFailed(err error) {
 	s.sync()
 }
 
-// reload re-attempts the focused pane from scratch, keeping nothing.
+// reload refetches the focused pane from the Forge (r, F5, or the options menu).
 func (s *state) reload() {
 	if s.focus == focusRepos && s.currentOrg.Name != "" {
 		s.loadRepos()
@@ -443,20 +495,63 @@ func (s *state) page(delta int) {
 	}
 }
 
-// descend opens the Org under the cursor, replacing whatever the Repo pane held.
+// descend opens the Org under the cursor. Reopening the Org already shown only moves
+// focus: nothing is refetched and the filter and ticks are kept. A different Org first
+// passes the selection guard, since opening it discards the current ticks.
 func (s *state) descend() {
 	row := s.orgFL.Selected()
 	if row == nil || s.mode != modeBrowse {
 		return
 	}
-	s.currentOrg = row.Org
+	org := row.Org
+	if org.Name == s.currentOrg.Name {
+		s.focus = focusRepos
+		if s.reposErr != nil {
+			s.loadRepos() // retry only after a failure
+		}
+		s.sync()
+		return
+	}
+	s.guardSelection("opening "+org.Name, func() { s.openOrg(org) })
+}
+
+// openOrg shows an Org's Repos, from this session's cache when it has them, otherwise
+// by fetching once.
+func (s *state) openOrg(org forge.Org) {
+	s.currentOrg = org
 	s.focus = focusRepos
 	s.selected = map[string]bool{}
 	s.clearQuery(focusRepos)
+	s.repoGen++ // drop any in-flight load for the Org shown before
+	s.reposErr, s.transientErr = nil, nil
+	if c, ok := s.repoCache[s.cacheKey(org)]; ok {
+		s.repoAll, s.reposLoaded, s.repoLoadedAt = c.repos, true, c.at
+		s.rebuildRepos()
+		return
+	}
 	s.loadRepos()
 }
 
-// enter is Enter and →: open the Org, or start cloning the Selection.
+// cyclePane is Tab and Shift-Tab. It never reloads: with an Org already open it only
+// moves focus; with none open yet, Orgs -> Repos opens the highlighted Org.
+func (s *state) cyclePane() {
+	if s.mode != modeBrowse {
+		return
+	}
+	if s.focus == focusRepos {
+		s.focus = focusOrgs
+		s.sync()
+		return
+	}
+	if s.currentOrg.Name == "" {
+		s.descend()
+		return
+	}
+	s.focus = focusRepos
+	s.sync()
+}
+
+// enter is Enter: open the Org, or start cloning the Selection.
 func (s *state) enter() {
 	if s.mode != modeBrowse {
 		return
@@ -465,30 +560,45 @@ func (s *state) enter() {
 		s.descend()
 		return
 	}
-	if s.selectionCount() > 0 {
-		s.openClone()
+	s.cloneSelection()
+}
+
+// right is → and l: open the highlighted Org. It does nothing in the Repo pane, so a
+// stray arrow can never start a clone.
+func (s *state) right() {
+	if s.mode == modeBrowse && s.focus == focusOrgs {
+		s.descend()
 	}
 }
 
-// back is Esc and ←: leave the Repo pane (guarding a non-empty Selection, ADR-0005),
-// or clear the Org filter.
+// left is ← and h: back to the Org pane, keeping everything.
+func (s *state) left() {
+	if s.mode == modeBrowse && s.focus == focusRepos {
+		s.focus = focusOrgs
+		s.sync()
+	}
+}
+
+// back is Esc: clear the focused pane's filter; with none, leave the Repo pane.
 func (s *state) back() {
 	if s.mode != modeBrowse {
 		return
 	}
-	if s.focus == focusOrgs {
-		s.clearQuery(focusOrgs)
+	if s.query[s.focus] != "" {
+		s.clearQuery(s.focus)
 		return
 	}
-	if s.selectionCount() > 0 {
-		s.setMode(modeLeave)
-		return
-	}
-	s.focus = focusOrgs
-	s.sync()
+	s.left()
 }
 
-// tick ticks or unticks the focused Repo and moves on, fzf-style.
+// cloneSelection opens the clone screen for the ticked Repos, if any.
+func (s *state) cloneSelection() {
+	if s.mode == modeBrowse && s.selectionCount() > 0 {
+		s.openClone()
+	}
+}
+
+// tick ticks or unticks the focused Repo and moves on.
 func (s *state) tick(delta int) {
 	if s.focus != focusRepos || s.mode != modeBrowse {
 		return
@@ -507,16 +617,38 @@ func (s *state) tick(delta int) {
 	s.sync()
 }
 
-// tickAllMatching ticks every Repo passing the current filter and facets.
-func (s *state) tickAllMatching() {
+// toggleAllMatching ticks every Repo passing the filter and facets; when they are all
+// ticked already it unticks them instead.
+func (s *state) toggleAllMatching() {
 	if s.focus != focusRepos || s.mode != modeBrowse {
 		return
 	}
-	for _, r := range s.repoFL.Filter().Items {
-		r.Ticked = true
-		s.selected[r.Repo.Name] = true
+	items := s.repoFL.Filter().Items
+	allTicked := len(items) > 0
+	for _, r := range items {
+		if !r.Ticked {
+			allTicked = false
+			break
+		}
+	}
+	for _, r := range items {
+		r.Ticked = !allTicked
+		if r.Ticked {
+			s.selected[r.Repo.Name] = true
+		} else {
+			delete(s.selected, r.Repo.Name)
+		}
 	}
 	s.sync()
+}
+
+// clearSelection unticks everything, including ticks hidden by the filter or facets.
+func (s *state) clearSelection() {
+	if s.mode != modeBrowse && s.mode != modeOptions {
+		return
+	}
+	s.selected = map[string]bool{}
+	s.rebuildRepos()
 }
 
 // selectedCloneRepos converts the Selection into clone.Repo values, resolving each
@@ -557,12 +689,31 @@ func (s *state) cloneDone(resp glyphclone.Response) {
 	s.setMode(modeBrowse)
 }
 
-// ---- leave prompt ----------------------------------------------------------------
+// ---- selection guard ------------------------------------------------------------
+
+// guardSelection runs action at once when nothing is ticked. Otherwise it asks first,
+// because action (opening another Org, switching Host) would discard the ticks: clone
+// them now, discard and continue, or stay (ADR-0005, ADR-0009).
+func (s *state) guardSelection(what string, action func()) {
+	n := s.selectionCount()
+	if n == 0 {
+		action()
+		return
+	}
+	noun := "repos"
+	if n == 1 {
+		noun = "repo"
+	}
+	s.pending = action
+	s.leaveText = fmt.Sprintf("%d %s selected in %s: %s will discard them", n, noun, s.currentOrg.Name, what)
+	s.setMode(modeLeave)
+}
 
 func (s *state) leaveClone() {
 	if s.mode != modeLeave {
 		return
 	}
+	s.pending = nil
 	s.setMode(modeBrowse)
 	s.openClone()
 }
@@ -573,12 +724,17 @@ func (s *state) leaveDiscard() {
 	}
 	s.selected = map[string]bool{}
 	s.rebuildRepos()
-	s.focus = focusOrgs
+	action := s.pending
+	s.pending = nil
 	s.setMode(modeBrowse)
+	if action != nil {
+		action()
+	}
 }
 
 func (s *state) leaveStay() {
 	if s.mode == modeLeave {
+		s.pending = nil
 		s.setMode(modeBrowse)
 	}
 }
@@ -598,13 +754,19 @@ func (s *state) moveHost(delta int) {
 	s.sync()
 }
 
-// confirmHost activates the Host under the cursor and reloads everything from scratch,
-// exactly like a fresh launch against it.
+// confirmHost activates the Host under the cursor, after the selection guard.
 func (s *state) confirmHost() {
 	if s.mode != modeHost {
 		return
 	}
-	s.hostIdx = s.hostCursor
+	idx := s.hostCursor
+	s.guardSelection("switching host", func() { s.switchHost(idx) })
+}
+
+// switchHost reloads everything from scratch against Host idx, exactly like a fresh
+// launch. The session Repo cache is keyed by Host, so it is not shared across Hosts.
+func (s *state) switchHost(idx int) {
+	s.hostIdx = idx
 	s.focus = focusOrgs
 	s.currentOrg = forge.Org{}
 	s.repoGen++
@@ -650,11 +812,7 @@ func (s *state) sync() {
 	s.showHelp = s.mode == modeHelp
 	s.showClone = s.mode == modeClone
 
-	s.orgTitle = "Orgs"
-	s.repoTitle = "Repos"
-	if s.currentOrg.Name != "" {
-		s.repoTitle = fmt.Sprintf("Repos: %s · %d selected", s.currentOrg.Name, s.selectionCount())
-	}
+	s.updateTitles()
 
 	s.orgChips = "sort: " + s.orgSort.String()
 	if s.orgAff != affAll {
@@ -683,15 +841,16 @@ func (s *state) sync() {
 			s.hostRows[i].Mark = "*"
 		}
 	}
-	n := s.selectionCount()
-	noun := "repos"
-	if n == 1 {
-		noun = "repo"
-	}
-	s.leaveText = fmt.Sprintf("%d %s selected in %s", n, noun, s.currentOrg.Name)
 	s.helpH = int16(min(len(s.helpRows)+4, max(s.height-2, 5)))
 
 	s.footer = fmt.Sprintf(" host: %s · %d selected", s.activeHost().Name, s.selectionCount())
+	if s.mode == modeFilter {
+		what := "orgs"
+		if s.focus == focusRepos {
+			what = "repos"
+		}
+		s.footer += " · filtering " + what
+	}
 	s.hint = s.keyHints()
 	s.status = ""
 	if s.transientErr != nil {
@@ -702,6 +861,19 @@ func (s *state) sync() {
 	}
 	if s.fatalErr != nil {
 		s.fatalText = s.fatalErr.Error()
+	}
+}
+
+// updateTitles refreshes the pane titles. The Repo title carries the age of the data
+// (ADR-0007/0009), so it is also refreshed before every frame.
+func (s *state) updateTitles() {
+	s.orgTitle = "Orgs"
+	s.repoTitle = "Repos"
+	if s.currentOrg.Name != "" {
+		s.repoTitle = fmt.Sprintf("Repos: %s · %d selected", s.currentOrg.Name, s.selectionCount())
+		if s.reposLoaded && s.reposErr == nil && !s.repoLoadedAt.IsZero() {
+			s.repoTitle += " · loaded " + ago(s.now(), s.repoLoadedAt)
+		}
 	}
 }
 
@@ -717,9 +889,9 @@ type paneInfo struct {
 func paneMessage(p paneInfo) string {
 	switch {
 	case p.err != nil && p.all == 0:
-		return fmt.Sprintf("error loading %s: %v · open options (^o) to reload", p.what, p.err)
+		return fmt.Sprintf("error loading %s: %v · press r to reload", p.what, p.err)
 	case p.err != nil:
-		return fmt.Sprintf("error loading %s: %v · showing what loaded · ^o to reload", p.what, p.err)
+		return fmt.Sprintf("error loading %s: %v · showing what loaded · r to reload", p.what, p.err)
 	case p.visible > 0:
 		return ""
 	case !p.loaded && p.all == 0:
@@ -727,17 +899,21 @@ func paneMessage(p paneInfo) string {
 	case p.query != "" && p.all > 0:
 		return fmt.Sprintf("no matches for %q", p.query)
 	case p.all > 0:
-		return "nothing matches the current options (^o)"
+		return "nothing matches the current options (o)"
 	default:
 		return "no " + p.what
 	}
 }
 
 func (s *state) keyHints() string {
-	if s.focus == focusRepos {
-		return "type filter · ↑↓ move · tab tick · ^a all · enter clone · esc back · ^o options · F1 help"
+	switch {
+	case s.mode == modeFilter:
+		return "type to filter · ↑↓ move · enter accept · esc clear · ^c quit"
+	case s.focus == focusRepos:
+		return "/ filter · space tick · a all · x clear · enter clone · tab orgs · r reload · o options · ? help"
+	default:
+		return "/ filter · ↑↓ move · enter open · tab repos · r reload · o options · ? help · ^c quit"
 	}
-	return "type filter · ↑↓ move · enter open · esc clear · ^o options · F1 help · ^c quit"
 }
 
 // ---- options menu ----------------------------------------------------------------
@@ -760,6 +936,7 @@ func (s *state) buildMenu() []menuRow {
 		{"Repos: visibility", s.vis.String(), func() { s.vis = s.vis.next(); s.rebuildRepos() }},
 		{"Repos: sort", s.repoSort.String(), func() { s.repoSort = otherSort(s.repoSort, sortActivity); s.rebuildRepos() }},
 		{"Org pane width", fmt.Sprint(orgPaneWidths[s.orgWidthIdx]), s.cycleOrgWidth},
+		{"Clear selection", fmt.Sprintf("%d ticked", s.selectionCount()), s.clearSelection},
 		{"Reload focused pane", "", func() { s.setMode(modeBrowse); s.reload() }},
 	}
 }

@@ -9,19 +9,30 @@ type keyBinding struct {
 }
 
 var keymapTable = []keyBinding{
-	{"Browse", "type", "filter the focused pane (fzf: 'exact ^start end$ !not)"},
-	{"Browse", "↑/↓, ^p/^n", "move the cursor"},
+	{"Browse", "/", "filter the focused pane (fzf: 'exact ^start end$ !not, space = AND)"},
+	{"Browse", "↑/↓, j/k, ^p/^n", "move the cursor"},
 	{"Browse", "PgUp/PgDn", "move a page"},
-	{"Browse", "Enter, →", "Orgs: open the Org · Repos: clone the ticked Repos"},
-	{"Browse", "Esc, ←", "Repos: back to Orgs · Orgs: clear the filter"},
-	{"Browse", "Tab, Shift-Tab", "tick the Repo and move down / up"},
-	{"Browse", "^a", "tick every Repo matching the filter"},
-	{"Browse", "^o", "options: host, facets, sort, pane width, reload"},
-	{"Browse", "F1", "this help"},
+	{"Browse", "Tab, Shift-Tab", "switch between the Org and Repo panes (never reloads)"},
+	{"Browse", "Enter, →, l", "Orgs: open the Org (the Org already shown is not refetched)"},
+	{"Browse", "Enter, c", "Repos: clone the ticked Repos"},
+	{"Browse", "Esc", "clear the pane's filter; with none, Repos back to Orgs"},
+	{"Browse", "←, h", "Repos back to Orgs (ticks and filter are kept)"},
+	{"Browse", "Space", "tick the Repo and move down"},
+	{"Browse", "a", "tick every Repo matching the filter; again to untick them"},
+	{"Browse", "x", "clear the whole Selection, including ticks the filter hides"},
+	{"Browse", "r, F5", "reload the focused pane from the Forge"},
+	{"Browse", "o", "options: host, facets, sort, pane width, clear selection, reload"},
+	{"Browse", "?, F1", "this help"},
 	{"Browse", "^c", "quit"},
 
-	{"LeavePrompt", "c", "clone now"},
-	{"LeavePrompt", "d", "discard the Selection"},
+	{"Filter", "type", "edit the focused pane's filter (every key is text)"},
+	{"Filter", "↑/↓, ^p/^n, PgUp/PgDn", "move the list while typing"},
+	{"Filter", "Enter", "accept: back to the list, filter kept"},
+	{"Filter", "Esc", "clear the filter and go back to the list"},
+	{"Filter", "^c", "quit"},
+
+	{"LeavePrompt", "c", "clone the ticked Repos now"},
+	{"LeavePrompt", "d", "discard the Selection and continue"},
 	{"LeavePrompt", "Esc", "stay"},
 	{"LeavePrompt", "^c", "quit"},
 
@@ -40,14 +51,14 @@ var keymapTable = []keyBinding{
 
 	{"Options", "↑/↓", "move"},
 	{"Options", "Enter, Space", "change the value"},
-	{"Options", "Esc, ^o", "close"},
+	{"Options", "Esc, o", "close"},
 
 	{"HostSwitch", "↑/↓, ^p/^n", "move the cursor"},
 	{"HostSwitch", "Enter", "switch to this Host"},
 	{"HostSwitch", "Esc", "cancel"},
 	{"HostSwitch", "^c", "quit"},
 
-	{"Fatal", "^y", "switch to a different Host"},
+	{"Fatal", "y", "switch to a different Host"},
 	{"Fatal", "^c", "quit"},
 }
 

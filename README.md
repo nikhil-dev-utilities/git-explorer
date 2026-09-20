@@ -15,12 +15,12 @@ issues — is out of scope.
 │                        ││ > [x] tf-vpc                       3h ago  │
 ╰────────────────────────╯╰────────────────────────────────────────────╯
  host: ghe.corp.internal · 3 selected
- type filter · ↑↓ move · tab tick · ^a all · enter clone · esc back · ^o options · F1 help
+ / filter · space tick · a all · x clear · enter clone · tab orgs · r reload · o options · ? help
 ```
 
 Left pane: Orgs (namespaces that own repos — a personal account counts as one too).
-Right pane: Repos of the open Org. Both are fuzzy finders: type to filter the focused
-pane (fzf syntax — `'exact`, `^start`, `end$`, `!not`). `^a` ticks everything currently
+Right pane: Repos of the open Org. Both are fuzzy finders: press `/` to filter the focused
+pane (fzf syntax — `'exact`, `^start`, `end$`, `!not`). `a` ticks everything currently
 matching the filter; that one combination is most of the job. The panes reflow live as
 you resize the terminal.
 
@@ -56,9 +56,10 @@ both:
 git-explorer
 ```
 
-Start typing to filter Orgs, `Enter` to open one, `Tab` to tick Repos, `Enter` again to
-open the clone screen, browse to the target folder, `c` to clone — everything clones into
-the current directory by default. `^o` opens the options menu and `F1` shows every key.
+Press `/` and type to filter Orgs, `Enter` to keep the filter and `Enter` again to open an Org,
+`Space` to tick Repos, `Enter` to open the clone screen, browse to the target folder, `c` to
+clone — everything clones into the current directory by default. `o` opens the options menu
+and `?` shows every key.
 
 ### Configuration (optional)
 
@@ -75,26 +76,41 @@ by size — `--log-file <path>` or `GIT_EXPLORER_LOG` override it.
 
 ## Keybindings
 
-Typing always filters the focused pane, so actions live on a few non-printing keys. The
-filter uses [fzf](https://github.com/junegunn/fzf#search-syntax) syntax: plain text is a
-fuzzy match; `'foo` exact, `^foo` starts with, `foo$` ends with, `!foo` not, a space is
-AND and `|` is OR. Everything else you might want to change (host, hide archived/forks,
-visibility, sort, pane width, reload) is one menu: `^o`. `F1` shows this table in the app.
+Press `/` to filter the focused pane; until you press Enter (keep the filter) or Esc (clear it),
+every key is text. Everywhere else the keys are plain: `Space` ticks a Repo, `a` ticks all matching,
+`x` clears the Selection, `Tab` switches panes, `r`/`F5` reloads, `o` opens the options menu, `?`
+shows this table. The filter uses [fzf](https://github.com/junegunn/fzf#search-syntax) syntax: plain
+text fuzzy-matches; `'foo` exact, `^foo` starts with, `foo$` ends with, `!foo` not, a space is AND
+and `|` is OR.
+
+Repos are fetched only when you open an Org for the first time this session, or when you reload.
+Switching panes, or opening an Org you already viewed, never refetches; the Repo title shows how old
+the data is (`loaded 4m ago`).
 
 | Mode | Key | Action |
 |---|---|---|
-| Browse | type | filter the focused pane (fzf: 'exact ^start end$ !not) |
-| Browse | ↑/↓, ^p/^n | move the cursor |
+| Browse | / | filter the focused pane (fzf: 'exact ^start end$ !not, space = AND) |
+| Browse | ↑/↓, j/k, ^p/^n | move the cursor |
 | Browse | PgUp/PgDn | move a page |
-| Browse | Enter, → | Orgs: open the Org · Repos: clone the ticked Repos |
-| Browse | Esc, ← | Repos: back to Orgs · Orgs: clear the filter |
-| Browse | Tab, Shift-Tab | tick the Repo and move down / up |
-| Browse | ^a | tick every Repo matching the filter |
-| Browse | ^o | options: host, facets, sort, pane width, reload |
-| Browse | F1 | this help |
+| Browse | Tab, Shift-Tab | switch between the Org and Repo panes (never reloads) |
+| Browse | Enter, →, l | Orgs: open the Org (the Org already shown is not refetched) |
+| Browse | Enter, c | Repos: clone the ticked Repos |
+| Browse | Esc | clear the pane's filter; with none, Repos back to Orgs |
+| Browse | ←, h | Repos back to Orgs (ticks and filter are kept) |
+| Browse | Space | tick the Repo and move down |
+| Browse | a | tick every Repo matching the filter; again to untick them |
+| Browse | x | clear the whole Selection, including ticks the filter hides |
+| Browse | r, F5 | reload the focused pane from the Forge |
+| Browse | o | options: host, facets, sort, pane width, clear selection, reload |
+| Browse | ?, F1 | this help |
 | Browse | ^c | quit |
-| LeavePrompt | c | clone now |
-| LeavePrompt | d | discard the Selection |
+| Filter | type | edit the focused pane's filter (every key is text) |
+| Filter | ↑/↓, ^p/^n, PgUp/PgDn | move the list while typing |
+| Filter | Enter | accept: back to the list, filter kept |
+| Filter | Esc | clear the filter and go back to the list |
+| Filter | ^c | quit |
+| LeavePrompt | c | clone the ticked Repos now |
+| LeavePrompt | d | discard the Selection and continue |
 | LeavePrompt | Esc | stay |
 | LeavePrompt | ^c | quit |
 | CloneDialog | ↑/↓, j/k | move in the folder browser |
@@ -110,22 +126,22 @@ visibility, sort, pane width, reload) is one menu: `^o`. `F1` shows this table i
 | CloneRun | Esc | done: back to Browse |
 | Options | ↑/↓ | move |
 | Options | Enter, Space | change the value |
-| Options | Esc, ^o | close |
+| Options | Esc, o | close |
 | HostSwitch | ↑/↓, ^p/^n | move the cursor |
 | HostSwitch | Enter | switch to this Host |
 | HostSwitch | Esc | cancel |
 | HostSwitch | ^c | quit |
-| Fatal | ^y | switch to a different Host |
+| Fatal | y | switch to a different Host |
 | Fatal | ^c | quit |
 
-`LeavePrompt` guards a non-empty Selection when you try to leave the Repo pane without
-cloning it; `Options` is the `^o` menu; `CloneDialog` is a folder browser that picks the
-Target and previews where each Repo will land; `CloneRun` streams the clone itself into a
-live log; `HostSwitch` lists every Host from your config; `Fatal` shows when something
-(usually `gh` auth) needs fixing before anything else can work.
+`Filter` is the mode after `/`. `LeavePrompt` appears when opening another Org (or switching Host)
+would discard ticked Repos. `Options` is the `o` menu; `CloneDialog` is a folder browser that picks
+the Target and previews where each Repo will land; `CloneRun` streams the clone itself into a live
+log; `HostSwitch` lists every Host from your config; `Fatal` shows when something (usually `gh` auth)
+needs fixing before anything else can work.
 
-`internal/ui/readme_test.go` asserts this table against the app's own keymap table, so it
-can't silently drift from what the running app actually does.
+`internal/ui/keymap_test.go` asserts this table against the app's own keymap table, so it can't
+silently drift from what the running app actually does.
 
 ## Vocabulary
 

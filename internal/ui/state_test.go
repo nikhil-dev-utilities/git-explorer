@@ -49,10 +49,13 @@ func newTest(t *testing.T, f *fakeForge, userConfigured bool) *state {
 	return s
 }
 
+// typeText filters the focused pane the way a user does: / then the text, then Enter.
 func typeText(s *state, text string) {
+	s.startFilter()
 	for _, r := range text {
 		s.handleText(riffkey.Key{Rune: r})
 	}
+	s.acceptFilter()
 }
 
 func orgNames(s *state) []string {
@@ -141,17 +144,45 @@ func TestDescendLoadsReposHidesArchivedAndForksByDefault(t *testing.T) {
 	}
 }
 
-func TestEscInReposGoesBackAndKeepsOrgFilter(t *testing.T) {
+func TestEscClearsAFilterFirstThenLeavesTheRepoPane(t *testing.T) {
 	s := newTest(t, defaultFake(), true)
 	typeText(s, "ac")
 	s.enter()
-	s.back()
-	if s.focus != focusOrgs || s.query[focusOrgs] != "ac" {
-		t.Errorf("focus=%v query=%q, want orgs focused, filter intact", s.focus, s.query[focusOrgs])
+	typeText(s, "tf")
+	s.back() // clears the Repo filter, stays in Repos
+	if s.focus != focusRepos || s.query[focusRepos] != "" {
+		t.Fatalf("focus=%v repoQuery=%q, want Repos with the filter cleared", s.focus, s.query[focusRepos])
 	}
-	s.back() // Esc in Orgs clears the filter
+	s.back() // nothing to clear: back to Orgs
+	if s.focus != focusOrgs || s.query[focusOrgs] != "ac" {
+		t.Errorf("focus=%v orgQuery=%q, want Orgs with its filter intact", s.focus, s.query[focusOrgs])
+	}
+	s.back() // Esc in Orgs clears its filter
 	if s.query[focusOrgs] != "" || len(orgNames(s)) != 3 {
 		t.Errorf("Org filter not cleared: %q %v", s.query[focusOrgs], orgNames(s))
+	}
+}
+
+func TestFilterModeAcceptKeepsAndCancelClears(t *testing.T) {
+	s := newTest(t, defaultFake(), true)
+	s.startFilter()
+	if s.mode != modeFilter || !strings.Contains(s.footer, "filtering orgs") {
+		t.Fatalf("mode=%v footer=%q", s.mode, s.footer)
+	}
+	for _, r := range "gl" {
+		s.handleText(riffkey.Key{Rune: r})
+	}
+	s.acceptFilter()
+	if s.mode != modeBrowse || s.query[focusOrgs] != "gl" || join(orgNames(s)) != "globex" {
+		t.Errorf("accept: mode=%v q=%q orgs=%v", s.mode, s.query[focusOrgs], orgNames(s))
+	}
+	s.startFilter()
+	s.cancelFilter()
+	if s.mode != modeBrowse || s.query[focusOrgs] != "" || len(orgNames(s)) != 3 {
+		t.Errorf("cancel: mode=%v q=%q orgs=%v", s.mode, s.query[focusOrgs], orgNames(s))
+	}
+	if s.handleText(riffkey.Key{Rune: 'x'}) {
+		t.Error("text handled outside filter mode")
 	}
 }
 
@@ -159,30 +190,47 @@ func TestTickAllMatchesOnlyTheFilteredRepos(t *testing.T) {
 	s := newTest(t, defaultFake(), true)
 	s.enter()
 	typeText(s, "tf")
-	s.tickAllMatching()
+	s.toggleAllMatching()
 	if s.selectionCount() != 2 || s.selected["web"] {
 		t.Errorf("selected = %v, want only tf-*", s.selected)
 	}
 }
 
-func TestLeavePromptGuardsSelection(t *testing.T) {
-	s := newTest(t, defaultFake(), true)
-	s.enter()
+func TestSelectionGuardFiresOnlyWhenTicksWouldBeLost(t *testing.T) {
+	f := defaultFake()
+	s := newTest(t, f, true)
+	s.enter() // acme
 	s.tick(1)
+
+	// moving focus never prompts and keeps the ticks
+	s.left()
+	s.cyclePane()
 	s.back()
-	if s.mode != modeLeave || s.focus != focusRepos {
-		t.Fatalf("mode=%v focus=%v, want leave prompt with focus kept", s.mode, s.focus)
+	if s.mode != modeBrowse || s.selectionCount() != 1 {
+		t.Fatalf("focus moves must keep ticks and not prompt: mode=%v sel=%d", s.mode, s.selectionCount())
+	}
+
+	// opening a different Org would discard them
+	s.left()
+	s.move(1) // globex (needs a frame in real use; force the cursor)
+	s.orgFL.SetQuery("gl")
+	s.enter()
+	if s.mode != modeLeave || !strings.Contains(s.leaveText, "1 repo selected in acme") || !strings.Contains(s.leaveText, "opening globex") {
+		t.Fatalf("mode=%v text=%q", s.mode, s.leaveText)
+	}
+	if s.currentOrg.Name != "acme" {
+		t.Errorf("the Org changed before the guard was answered: %s", s.currentOrg.Name)
 	}
 
 	s.leaveStay()
-	if s.mode != modeBrowse || s.selectionCount() != 1 {
-		t.Errorf("stay: mode=%v sel=%d", s.mode, s.selectionCount())
+	if s.mode != modeBrowse || s.selectionCount() != 1 || s.currentOrg.Name != "acme" {
+		t.Errorf("stay: mode=%v sel=%d org=%s", s.mode, s.selectionCount(), s.currentOrg.Name)
 	}
 
-	s.back()
+	s.enter()
 	s.leaveDiscard()
-	if s.mode != modeBrowse || s.focus != focusOrgs || s.selectionCount() != 0 {
-		t.Errorf("discard: mode=%v focus=%v sel=%d", s.mode, s.focus, s.selectionCount())
+	if s.mode != modeBrowse || s.currentOrg.Name != "globex" || s.selectionCount() != 0 || s.focus != focusRepos {
+		t.Errorf("discard: mode=%v org=%s sel=%d focus=%v", s.mode, s.currentOrg.Name, s.selectionCount(), s.focus)
 	}
 }
 
@@ -214,6 +262,10 @@ func TestHostSwitchResetsEverythingAndReloads(t *testing.T) {
 	s.moveHost(1)
 	s.moveHost(5) // clamps
 	s.confirmHost()
+	if s.mode != modeLeave || !strings.Contains(s.leaveText, "switching host") || s.activeHost().Name != "github.com" {
+		t.Fatalf("a ticked Selection must prompt before switching host: mode=%v text=%q", s.mode, s.leaveText)
+	}
+	s.leaveDiscard()
 
 	if s.mode != modeBrowse || s.activeHost().Name != "ghe.corp" || s.focus != focusOrgs {
 		t.Fatalf("mode=%v host=%s focus=%v", s.mode, s.activeHost().Name, s.focus)

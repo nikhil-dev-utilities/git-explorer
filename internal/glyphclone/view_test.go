@@ -111,8 +111,12 @@ func TestRunPhaseShowsLogAndSummary(t *testing.T) {
 
 	h.typed("c")
 
+	// Glyph's Log appends from its own goroutine and rewrites its layer without
+	// synchronising with rendering, so render only after that goroutine has gone idle:
+	// rendering while it is still writing is a race inside Glyph, not in this code.
+	time.Sleep(200 * time.Millisecond)
 	var out string
-	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 		if out = h.render(90, 14); strings.Contains(out, "failed: boom line two") {
 			break
 		}

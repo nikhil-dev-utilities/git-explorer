@@ -22,16 +22,18 @@ func TestReadmeKeybindingsTable_MatchesKeymapTable(t *testing.T) {
 	}
 }
 
-// ADR-0006: the filter box is always live, so keys people expect to edit text with must
-// never become app verbs. ^a is deliberately not in this set any more (ADR-0008 makes it
-// "tick all"; Home still moves to the start of the filter).
-func TestKeymapTable_NeverBindsAForbiddenKey(t *testing.T) {
-	forbidden := []string{"^h", "^i", "^m", "^[", "^e", "^u", "^w", "^k", "^z", "^d"}
+// ADR-0006/0009: while a filter is being typed every printable key is text, so the Filter
+// mode must never bind the keys people edit text with. Browse mode has no such limit.
+func TestFilterModeNeverBindsATextEditingKey(t *testing.T) {
+	forbidden := []string{"^h", "^i", "^m", "^[", "^a", "^e", "^u", "^w", "^k", "^z", "^d"}
 	for _, kb := range keymapTable {
+		if kb.mode != "Filter" {
+			continue
+		}
 		for _, part := range strings.Split(kb.key, ",") {
 			for _, f := range forbidden {
 				if strings.EqualFold(strings.TrimSpace(part), f) {
-					t.Errorf("keymapTable binds forbidden key %s: %+v", f, kb)
+					t.Errorf("Filter mode binds text-editing key %s: %+v", f, kb)
 				}
 			}
 		}
@@ -43,16 +45,26 @@ func TestBrowseKeyHintsAreInTheKeymapTable(t *testing.T) {
 	var browse strings.Builder
 	for _, kb := range keymapTable {
 		if kb.mode == "Browse" {
-			browse.WriteString(kb.key + " " + kb.action + " ")
+			browse.WriteString(strings.ToLower(kb.key) + " ")
 		}
+	}
+	tokens := map[string]string{ // as shown in the hint -> as listed in the table
+		"/": "/", "↑↓": "↑/↓", "enter": "enter", "tab": "tab", "space": "space", "a": "a",
+		"x": "x", "r": "r", "o": "o", "?": "?", "^c": "^c",
 	}
 	s := newTest(t, defaultFake(), true)
 	for _, f := range []focus{focusOrgs, focusRepos} {
 		s.focus = f
-		for _, token := range []string{"↑↓", "tab", "^a", "enter", "esc", "^o", "F1", "^c"} {
-			if strings.Contains(s.keyHints(), token) &&
-				!strings.Contains(strings.ToLower(browse.String()), strings.ToLower(strings.ReplaceAll(token, "↑↓", "↑/↓"))) {
-				t.Errorf("focus %v: hint %q is not in the Browse keymap rows", f, token)
+		hint := s.keyHints()
+		for _, part := range strings.Split(hint, " · ") {
+			key := strings.Fields(part)[0]
+			want, ok := tokens[key]
+			if !ok {
+				t.Errorf("focus %v: hint %q uses key %q the test does not know", f, part, key)
+				continue
+			}
+			if !strings.Contains(browse.String(), want) {
+				t.Errorf("focus %v: hint key %q is not in the Browse keymap rows", f, key)
 			}
 		}
 	}

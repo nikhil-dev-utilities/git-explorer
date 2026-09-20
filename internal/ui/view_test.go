@@ -54,6 +54,9 @@ func (h *harness) press(specials ...riffkey.Special) {
 	}
 }
 
+// now sets the clock the Repo title's age is measured against.
+func (h *harness) now(t time.Time) { h.s.now = func() time.Time { return t } }
+
 func (h *harness) ctrl(r rune) { h.app.Input().Dispatch(riffkey.Key{Rune: r, Mod: riffkey.ModCtrl}) }
 
 func (h *harness) typed(text string) {
@@ -70,41 +73,76 @@ func TestBrowseRendersBothPanesWithBadgesAndAge(t *testing.T) {
 	h.s.enter()
 	out := h.render(140, 16)
 	for _, want := range []string{"Orgs", "Repos: acme · 0 selected", "acme", "globex", "tf-network", "3d ago",
-		"archived: hide", "host: github.com", "type filter"} {
+		"archived: hide", "host: github.com", "/ filter"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q:\n%s", want, out)
 		}
 	}
 }
 
-func TestTypingFiltersTheFocusedPaneOnly(t *testing.T) {
+func TestSlashFiltersTheFocusedPaneOnly(t *testing.T) {
 	h := mount(t, defaultFake(), true)
 	h.render(100, 14)
 
-	h.typed("gl")
+	h.typed("/gl")
+	h.press(riffkey.SpecialEnter) // accept the filter
 	out := h.render(100, 14)
 	if !strings.Contains(out, "globex") || strings.Contains(out, "platform-eng") {
 		t.Errorf("Org filter not applied:\n%s", out)
 	}
 
-	h.press(riffkey.SpecialEnter) // descend into globex (no repos), focus repos
-	h.typed("zz")
+	h.press(riffkey.SpecialEnter) // open globex, focus Repos
+	h.typed("/zz")
+	h.press(riffkey.SpecialEnter)
 	if h.s.query[focusOrgs] != "gl" || h.s.query[focusRepos] != "zz" {
 		t.Errorf("queries = %q", h.s.query)
 	}
-	h.press(riffkey.SpecialEscape)
+	h.press(riffkey.SpecialEscape) // clears the Repo filter, stays in Repos
+	if h.s.focus != focusRepos || h.s.query[focusRepos] != "" {
+		t.Errorf("first Esc: focus=%v q=%q", h.s.focus, h.s.query)
+	}
+	h.press(riffkey.SpecialEscape) // then back to Orgs
 	if h.s.focus != focusOrgs {
-		t.Errorf("Esc did not return focus to Orgs")
+		t.Errorf("second Esc did not return focus to Orgs")
 	}
 }
 
-func TestKeysMoveTickAndAdvance(t *testing.T) {
+func TestBareLettersAreVerbsInListModeAndTextInFilterMode(t *testing.T) {
+	h := mount(t, defaultFake(), true)
+	h.render(120, 20)
+	h.press(riffkey.SpecialEnter) // acme
+	h.render(120, 20)
+
+	h.typed("clone") // list mode: c/l/o/n/e are verbs or nothing, never filter text
+	if h.s.query != [2]string{} {
+		t.Errorf("list-mode letters edited a filter: %q", h.s.query)
+	}
+	h.press(riffkey.SpecialEscape)
+	if h.s.mode != modeBrowse && h.s.mode != modeOptions {
+		t.Fatalf("mode = %v", h.s.mode)
+	}
+	if h.s.mode == modeOptions {
+		h.press(riffkey.SpecialEscape)
+	}
+
+	h.typed("/")
+	h.typed("clone axo?") // filter mode: everything is text, none of it fires a verb
+	if h.s.mode != modeFilter || h.s.query[focusRepos] != "clone axo?" || h.s.selectionCount() != 0 {
+		t.Errorf("mode=%v q=%q sel=%d", h.s.mode, h.s.query, h.s.selectionCount())
+	}
+	h.press(riffkey.SpecialEscape)
+	if h.s.mode != modeBrowse || h.s.query[focusRepos] != "" {
+		t.Errorf("Esc in filter mode: mode=%v q=%q", h.s.mode, h.s.query)
+	}
+}
+
+func TestSpaceTicksAndAdvancesAToggleAllXClears(t *testing.T) {
 	h := mount(t, defaultFake(), true)
 	h.render(120, 16)
 	h.press(riffkey.SpecialEnter) // acme
 	h.render(120, 16)
 
-	h.press(riffkey.SpecialTab, riffkey.SpecialTab)
+	h.press(riffkey.SpecialSpace, riffkey.SpecialSpace)
 	if h.s.selectionCount() != 2 || !h.s.selected["tf-dns"] || !h.s.selected["tf-network"] {
 		t.Fatalf("selected = %v", h.s.selected)
 	}
@@ -116,14 +154,135 @@ func TestKeysMoveTickAndAdvance(t *testing.T) {
 		t.Errorf("ticks not shown:\n%s", out)
 	}
 
-	h.press(riffkey.SpecialUp)
-	h.ctrl('a') // tick all matching
+	h.typed("a") // not everything matching is ticked: tick all
 	if h.s.selectionCount() != 3 {
-		t.Errorf("^a: selected = %v", h.s.selected)
+		t.Errorf("a: selected = %v", h.s.selected)
 	}
-	h.press(riffkey.SpecialEscape) // selection non-empty -> leave prompt
-	if h.s.mode != modeLeave {
-		t.Errorf("mode = %v, want leave prompt", h.s.mode)
+	h.typed("a") // all ticked: untick them
+	if h.s.selectionCount() != 0 {
+		t.Errorf("a again: selected = %v", h.s.selected)
+	}
+
+	h.typed("/tf")
+	h.press(riffkey.SpecialEnter)
+	h.typed("a") // ticks only tf-* (filter narrows), web stays out
+	if h.s.selectionCount() != 2 || h.s.selected["web"] {
+		t.Errorf("a with filter: %v", h.s.selected)
+	}
+	h.typed("/web")
+	h.press(riffkey.SpecialEnter)
+	h.press(riffkey.SpecialSpace)
+	h.typed("x") // clears every tick, including the two the filter now hides
+	if h.s.selectionCount() != 0 {
+		t.Errorf("x left ticks behind: %v", h.s.selected)
+	}
+}
+
+func TestTabCyclesPanesWithoutReloading(t *testing.T) {
+	f := defaultFake()
+	h := mount(t, f, true)
+	h.render(120, 16)
+	shiftTab := riffkey.Key{Special: riffkey.SpecialTab, Mod: riffkey.ModShift}
+
+	h.press(riffkey.SpecialTab) // nothing open yet: opens the highlighted Org, once
+	if h.s.focus != focusRepos || h.s.currentOrg.Name != "acme" || len(f.repoCalls) != 1 {
+		t.Fatalf("first Tab: focus=%v org=%q calls=%v", h.s.focus, h.s.currentOrg.Name, f.repoCalls)
+	}
+	h.typed("/tf")
+	h.press(riffkey.SpecialEnter)
+	h.render(120, 16)
+	h.press(riffkey.SpecialSpace) // tick tf-dns
+
+	h.app.Input().Dispatch(shiftTab) // back to Orgs
+	if h.s.focus != focusOrgs {
+		t.Fatalf("Shift-Tab: focus = %v", h.s.focus)
+	}
+	h.render(120, 16)
+	h.press(riffkey.SpecialDown) // Orgs cursor moves to globex; Repos still shows acme
+	h.press(riffkey.SpecialTab)
+	if h.s.focus != focusRepos || h.s.currentOrg.Name != "acme" {
+		t.Errorf("Tab back must show the Org already open, not the highlighted one: focus=%v org=%q", h.s.focus, h.s.currentOrg.Name)
+	}
+	if len(f.repoCalls) != 1 || h.s.query[focusRepos] != "tf" || !h.s.selected["tf-dns"] {
+		t.Errorf("cycling must not reload or drop state: calls=%v q=%q sel=%v", f.repoCalls, h.s.query[focusRepos], h.s.selected)
+	}
+	if !strings.Contains(h.render(120, 16), "Repos: acme · 1 selected") {
+		t.Error("Repo title lost the Org / selection")
+	}
+}
+
+func TestReopeningTheShownOrgNeverRefetchesAndCacheServesOthers(t *testing.T) {
+	f := defaultFake()
+	f.repos["globex"] = []forge.Repo{repo("globex", "g1"), repo("globex", "g2")}
+	h := mount(t, f, true)
+	h.s.now = testNow
+	h.render(120, 16)
+
+	h.press(riffkey.SpecialEnter) // acme: first fetch
+	h.render(120, 16)
+	h.typed("/tf")
+	h.press(riffkey.SpecialEnter)
+	h.press(riffkey.SpecialLeft)
+	h.press(riffkey.SpecialEnter) // same Org again
+	if strings.Join(f.repoCalls, ",") != "acme" || h.s.query[focusRepos] != "tf" {
+		t.Fatalf("same Org refetched or lost its filter: calls=%v q=%q", f.repoCalls, h.s.query[focusRepos])
+	}
+
+	h.press(riffkey.SpecialLeft)
+	h.render(120, 16)
+	h.press(riffkey.SpecialDown)
+	h.press(riffkey.SpecialEnter) // globex: first fetch
+	h.press(riffkey.SpecialLeft)
+	h.render(120, 16)
+	h.press(riffkey.SpecialUp)
+	h.press(riffkey.SpecialEnter) // acme again: served from this session's cache
+	if strings.Join(f.repoCalls, ",") != "acme,globex" || h.s.currentOrg.Name != "acme" || len(repoNames(h.s)) != 3 {
+		t.Errorf("cache not used: calls=%v org=%s repos=%v", f.repoCalls, h.s.currentOrg.Name, repoNames(h.s))
+	}
+
+	h.now(testNow().Add(4 * time.Minute)) // the data is now 4 minutes old
+	if !strings.Contains(h.render(120, 16), "loaded 4m ago") {
+		t.Errorf("staleness not shown:\n%s", h.render(120, 16))
+	}
+
+	h.typed("r") // explicit reload refetches and resets the age
+	if strings.Join(f.repoCalls, ",") != "acme,globex,acme" {
+		t.Errorf("r did not refetch: %v", f.repoCalls)
+	}
+	h.press(riffkey.SpecialF5)
+	if len(f.repoCalls) != 4 {
+		t.Errorf("F5 did not refetch: %v", f.repoCalls)
+	}
+}
+
+func TestOpeningAnotherOrgWithTicksPromptsThroughTheKeys(t *testing.T) {
+	h := mount(t, defaultFake(), true)
+	h.render(120, 20)
+	h.press(riffkey.SpecialEnter) // acme
+	h.render(120, 20)
+	h.press(riffkey.SpecialSpace)
+
+	h.press(riffkey.SpecialLeft, riffkey.SpecialEscape, riffkey.SpecialTab, riffkey.SpecialTab)
+	if h.s.mode != modeBrowse || h.s.selectionCount() != 1 {
+		t.Fatalf("focus moves prompted or dropped ticks: mode=%v sel=%d", h.s.mode, h.s.selectionCount())
+	}
+
+	h.press(riffkey.SpecialLeft)
+	h.render(120, 20)
+	h.press(riffkey.SpecialDown) // globex
+	h.press(riffkey.SpecialEnter)
+	out := h.render(120, 20)
+	if h.s.mode != modeLeave || !strings.Contains(out, "1 repo selected in acme") || !strings.Contains(out, "opening globex") ||
+		!strings.Contains(out, "d discard and continue") {
+		t.Fatalf("guard card (mode %v):\n%s", h.s.mode, out)
+	}
+	h.typed("x") // inert under the card
+	if h.s.selectionCount() != 1 {
+		t.Error("a bare key acted under the guard card")
+	}
+	h.typed("d")
+	if h.s.mode != modeBrowse || h.s.currentOrg.Name != "globex" || h.s.selectionCount() != 0 || h.s.focus != focusRepos {
+		t.Errorf("discard: mode=%v org=%s sel=%d focus=%v", h.s.mode, h.s.currentOrg.Name, h.s.selectionCount(), h.s.focus)
 	}
 }
 
@@ -186,7 +345,7 @@ func TestFatalShowsTheFixCommandOverEmptyPanes(t *testing.T) {
 	f := &fakeForge{orgsErr: &forge.Error{Kind: forge.ErrKindFatal, Message: "not authenticated: run gh auth login"}}
 	h := mount(t, f, true)
 	out := h.render(100, 14)
-	if !strings.Contains(out, "gh auth login") || !strings.Contains(out, "^y switch host") {
+	if !strings.Contains(out, "gh auth login") || !strings.Contains(out, "y switch host") {
 		t.Errorf("fatal view:\n%s", out)
 	}
 }
@@ -200,7 +359,7 @@ func TestShortTerminalKeepsBordersAndFooterIntact(t *testing.T) {
 		if len(lines) > ht {
 			t.Errorf("height %d: frame is %d lines", ht, len(lines))
 		}
-		if !strings.Contains(out, "type filter") || !strings.Contains(out, "host: github.com") {
+		if !strings.Contains(out, "/ filter") || !strings.Contains(out, "host: github.com") {
 			t.Errorf("height %d: footer overwritten:\n%s", ht, out)
 		}
 		bottoms := 0
@@ -224,15 +383,15 @@ func TestOptionsMenuCyclesFacetsAndOwnsTheKeysWhileOpen(t *testing.T) {
 	h.press(riffkey.SpecialEnter) // acme
 	h.render(110, 22)
 
-	h.ctrl('o')
+	h.typed("o")
 	out := h.render(110, 22)
-	for _, want := range []string{"Options", "Host", "github.com", "Repos: archived", "hide", "Org pane width", "Reload focused pane"} {
+	for _, want := range []string{"Options", "Host", "github.com", "Repos: archived", "hide", "Org pane width", "Clear selection", "Reload focused pane"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("options card missing %q:\n%s", want, out)
 		}
 	}
 
-	h.typed("xyz") // browse typing must be inert under the menu
+	h.typed("xyz") // browse keys must be inert under the menu
 	if h.s.query[focusRepos] != "" {
 		t.Errorf("typing leaked to the filter under the menu: %q", h.s.query)
 	}
@@ -250,7 +409,7 @@ func TestOptionsMenuCyclesFacetsAndOwnsTheKeysWhileOpen(t *testing.T) {
 	if h.s.mode != modeBrowse {
 		t.Fatalf("mode = %v after Esc", h.s.mode)
 	}
-	h.typed("tf")
+	h.typed("/tf")
 	if h.s.query[focusRepos] != "tf" {
 		t.Errorf("filter typing did not resume after closing the menu: %q", h.s.query)
 	}
@@ -266,7 +425,7 @@ func TestOptionsRowsCoverEveryFacetAndReload(t *testing.T) {
 	for _, r := range s.menu {
 		labels = append(labels, r.Label)
 	}
-	want := "Host,Orgs: affiliation,Orgs: sort,Repos: archived,Repos: forks,Repos: visibility,Repos: sort,Org pane width,Reload focused pane"
+	want := "Host,Orgs: affiliation,Orgs: sort,Repos: archived,Repos: forks,Repos: visibility,Repos: sort,Org pane width,Clear selection,Reload focused pane"
 	if join(labels) != want {
 		t.Fatalf("rows = %s", join(labels))
 	}
@@ -311,34 +470,12 @@ func TestOptionsRowsCoverEveryFacetAndReload(t *testing.T) {
 	}
 }
 
-func TestLeavePromptCardAndItsKeys(t *testing.T) {
-	h := mount(t, defaultFake(), true)
-	h.render(110, 20)
-	h.press(riffkey.SpecialEnter)
-	h.render(110, 20)
-	h.press(riffkey.SpecialTab)
-	h.press(riffkey.SpecialEscape)
-
-	out := h.render(110, 20)
-	if h.s.mode != modeLeave || !strings.Contains(out, "1 repo selected in acme") || !strings.Contains(out, "c clone now") {
-		t.Fatalf("leave card missing (mode %v):\n%s", h.s.mode, out)
-	}
-	h.typed("x") // inert
-	if h.s.query[focusRepos] != "" {
-		t.Error("typing leaked under the leave prompt")
-	}
-	h.typed("d")
-	if h.s.mode != modeBrowse || h.s.selectionCount() != 0 || h.s.focus != focusOrgs {
-		t.Errorf("d: mode=%v sel=%d focus=%v", h.s.mode, h.s.selectionCount(), h.s.focus)
-	}
-}
-
 func TestHostSwitchThroughOptionsReloadsFromTheNewHost(t *testing.T) {
 	f := defaultFake()
 	h := mount(t, f, true)
 	h.render(110, 22)
 
-	h.ctrl('o')
+	h.typed("o")
 	h.press(riffkey.SpecialEnter) // Host row
 	out := h.render(110, 22)
 	if h.s.mode != modeHost || !strings.Contains(out, "Hosts") || !strings.Contains(out, "* github.com") || !strings.Contains(out, "ghe.corp") {
@@ -351,9 +488,9 @@ func TestHostSwitchThroughOptionsReloadsFromTheNewHost(t *testing.T) {
 	if !strings.Contains(h.render(110, 22), "host: ghe.corp") {
 		t.Error("footer did not switch host")
 	}
-	h.typed("co") // browse keys are back
+	h.typed("/co") // browse keys are back
 	if h.s.query[focusOrgs] != "co" {
-		t.Errorf("typing did not resume: %q", h.s.query)
+		t.Errorf("filtering did not resume: %q", h.s.query)
 	}
 }
 
@@ -362,7 +499,7 @@ func TestHelpOverlayListsTheKeymapAndScrolls(t *testing.T) {
 	h.render(120, 40)
 	h.press(riffkey.SpecialF1)
 	out := h.render(120, 40)
-	for _, want := range []string{"Help", "Browse", "tick every Repo matching the filter", "LeavePrompt", "fzf:"} {
+	for _, want := range []string{"Help", "Browse", "tick every Repo matching the filter", "LeavePrompt", "fzf:", "Filter"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("help missing %q:\n%s", want, out)
 		}
@@ -392,16 +529,16 @@ func TestFatalOffersHostSwitchAndReturnsToFatalOnCancel(t *testing.T) {
 		t.Error("typing leaked under the fatal card")
 	}
 
-	h.ctrl('y')
+	h.typed("y")
 	if h.s.mode != modeHost {
-		t.Fatalf("^y: mode = %v", h.s.mode)
+		t.Fatalf("y: mode = %v", h.s.mode)
 	}
 	h.press(riffkey.SpecialEscape)
 	if h.s.mode != modeFatal {
 		t.Errorf("cancel should return to the fatal card, got %v", h.s.mode)
 	}
 
-	h.ctrl('y')
+	h.typed("y")
 	h.press(riffkey.SpecialDown, riffkey.SpecialEnter)
 	if h.s.mode != modeBrowse || join(orgNames(h.s)) != "corp" || h.s.fatalErr != nil {
 		t.Errorf("switch away from the broken host: mode=%v orgs=%v fatal=%v", h.s.mode, orgNames(h.s), h.s.fatalErr)
@@ -427,11 +564,14 @@ func fakeRun(_ context.Context, target string, repos []clone.Repo, sub bool, _ i
 	return out
 }
 
-// pollFor re-renders until want appears (the Log widget consumes its pipe asynchronously).
+// pollFor re-renders until want appears. Glyph's Log appends from its own goroutine and
+// rewrites its layer without synchronising with rendering, so wait for that goroutine to
+// go idle before the first render (rendering while it writes is a race inside Glyph).
 func (h *harness) pollFor(w, ht int, want string) string {
 	h.t.Helper()
+	time.Sleep(200 * time.Millisecond)
 	var out string
-	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
 		if out = h.render(w, ht); strings.Contains(out, want) {
 			return out
 		}
@@ -444,7 +584,7 @@ func (h *harness) selectTwoAndOpenClone() {
 	h.render(120, 30)
 	h.press(riffkey.SpecialEnter) // acme
 	h.render(120, 30)
-	h.press(riffkey.SpecialTab, riffkey.SpecialTab)
+	h.press(riffkey.SpecialSpace, riffkey.SpecialSpace)
 	h.press(riffkey.SpecialEnter) // clone
 }
 
@@ -475,9 +615,9 @@ func TestCloneScreenRunsInTheSharedAppAndClearsTheSelection(t *testing.T) {
 	if h.s.mode != modeBrowse || h.s.selectionCount() != 0 || !strings.Contains(out, "0 selected") {
 		t.Errorf("after the run: mode=%v selected=%d\n%s", h.s.mode, h.s.selectionCount(), out)
 	}
-	h.typed("we") // browse keys are live again
+	h.typed("/we") // browse keys are live again
 	if h.s.query[focusRepos] != "we" {
-		t.Errorf("filter typing did not resume: %q", h.s.query)
+		t.Errorf("filtering did not resume: %q", h.s.query)
 	}
 }
 

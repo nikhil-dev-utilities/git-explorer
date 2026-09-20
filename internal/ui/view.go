@@ -10,7 +10,7 @@ import (
 var modalFill = RGB(0x1c, 0x1c, 0x1c)
 
 func orgPane(s *state) Component {
-	s.orgFL.Render(func(r *orgRow) Component {
+	s.orgFL.Placeholder("press / to filter").Render(func(r *orgRow) Component {
 		return HBox.Gap(1)(Text(&r.Org.Name), Space(), Text(&r.Aff).Dim())
 	})
 	return VBox.Border(BorderRounded).BorderFG(&s.orgBorder).Width(&s.orgW).Height(&s.paneH)(
@@ -22,7 +22,7 @@ func orgPane(s *state) Component {
 }
 
 func repoPane(s *state) Component {
-	s.repoFL.Render(func(r *repoRow) Component {
+	s.repoFL.Placeholder("press / to filter").Render(func(r *repoRow) Component {
 		return HBox(
 			If(&r.Ticked).Then(Text("[x]").FG(Green)).Else(Text("[ ]").Dim()),
 			SpaceW(1),
@@ -63,7 +63,7 @@ func leaveCard(s *state) Component {
 	return VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(
 		Text(&s.leaveText).Bold(),
 		Text(""),
-		Text("c clone now · d discard · esc stay").Dim(),
+		Text("c clone now · d discard and continue · esc stay").Dim(),
 	)
 }
 
@@ -92,7 +92,7 @@ func fatalView(s *state) Component {
 		Text(""),
 		Text(&s.fatalText),
 		Text(""),
-		Text("^y switch host · ^c quit").Dim(),
+		Text("y switch host · ^c quit").Dim(),
 	)
 }
 
@@ -115,7 +115,8 @@ func rootView(s *state, clone *glyphclone.Embedded) Component {
 // wire installs the view and key handling. FilterList registers its own text input and
 // <C-n>/<C-p>/<C-d>/<C-u> on the shared view router (last list wins), so every key is
 // re-registered here after SetView, focus-aware, which overrides them. Each modal mode
-// owns a router pushed on entry and popped on exit, so browse keys are inert under it.
+// (including typing a filter) owns a router pushed on entry and popped on exit, so browse
+// keys are inert under it and bare letters are text only while filtering (ADR-0009).
 func wire(app *App, s *state) {
 	scr := glyphclone.Embed(glyphclone.Hooks{
 		Spawn: s.spawn, Apply: s.apply, Refresh: s.refresh,
@@ -124,44 +125,61 @@ func wire(app *App, s *state) {
 	s.openScreen = scr.Open
 	app.SetView(rootView(s, scr))
 	app.OnResize(func(w, h int) { s.resize(w, h) })
+	app.OnBeforeRender(s.updateTitles)
 
 	bind := func(r *riffkey.Router, pattern string, fn func()) {
 		r.Handle(pattern, func(riffkey.Match) { fn(); app.RequestRender() })
 	}
+	bindAll := func(r *riffkey.Router, fn func(), patterns ...string) {
+		for _, p := range patterns {
+			bind(r, p, fn)
+		}
+	}
+	quit := func(r *riffkey.Router) { r.Handle("<C-c>", func(riffkey.Match) { app.Stop() }) }
+	moveKeys := func(r *riffkey.Router) {
+		bindAll(r, func() { s.move(-1) }, "<Up>", "<C-p>")
+		bindAll(r, func() { s.move(1) }, "<Down>", "<C-n>")
+		bind(r, "<PageUp>", func() { s.page(-1) })
+		bind(r, "<PageDown>", func() { s.page(1) })
+	}
 
 	base := app.Router()
 	base.NoCounts()
-	base.HandleUnmatched(s.handleText)
-	bind(base, "<Up>", func() { s.move(-1) })
-	bind(base, "<C-p>", func() { s.move(-1) })
-	bind(base, "<Down>", func() { s.move(1) })
-	bind(base, "<C-n>", func() { s.move(1) })
-	bind(base, "<PageUp>", func() { s.page(-1) })
-	bind(base, "<PageDown>", func() { s.page(1) })
+	// Swallow keys nothing binds: FilterList's own text binding is still registered here
+	// and would otherwise type bare letters into the last pane's hidden input.
+	base.HandleUnmatched(func(riffkey.Key) bool { return false })
+	moveKeys(base)
+	bind(base, "j", func() { s.move(1) })
+	bind(base, "k", func() { s.move(-1) })
+	bind(base, "/", s.startFilter)
+	bindAll(base, s.cyclePane, "<Tab>", "<S-Tab>")
 	bind(base, "<Enter>", s.enter)
-	bind(base, "<Right>", s.enter)
+	bindAll(base, s.right, "<Right>", "l")
+	bindAll(base, s.left, "<Left>", "h")
 	bind(base, "<Esc>", s.back)
-	bind(base, "<Left>", s.back)
-	bind(base, "<Tab>", func() { s.tick(1) })
-	bind(base, "<S-Tab>", func() { s.tick(-1) })
-	bind(base, "<C-a>", s.tickAllMatching)
-	bind(base, "<C-o>", s.openOptions)
-	bind(base, "<F1>", s.openHelp)
-	base.Handle("<C-c>", func(riffkey.Match) { app.Stop() })
+	bind(base, "<Space>", func() { s.tick(1) })
+	bind(base, "a", s.toggleAllMatching)
+	bind(base, "x", s.clearSelection)
+	bind(base, "c", s.cloneSelection)
+	bindAll(base, s.reload, "r", "<F5>")
+	bindAll(base, s.openOptions, "o", "<C-o>")
+	bindAll(base, s.openHelp, "?", "<F1>")
+	quit(base)
+
+	filter := riffkey.NewRouter().NoCounts()
+	filter.HandleUnmatched(s.handleText)
+	moveKeys(filter)
+	bind(filter, "<Enter>", s.acceptFilter)
+	bind(filter, "<Esc>", s.cancelFilter)
+	quit(filter)
 
 	options := riffkey.NewRouter().NoCounts()
-	bind(options, "<Up>", func() { s.menuMove(-1) })
-	bind(options, "<Down>", func() { s.menuMove(1) })
-	bind(options, "<C-p>", func() { s.menuMove(-1) })
-	bind(options, "<C-n>", func() { s.menuMove(1) })
-	bind(options, "<Enter>", s.menuActivate)
-	bind(options, "<Space>", s.menuActivate)
-	bind(options, "<Right>", s.menuActivate)
-	bind(options, "<Esc>", s.closeOptions)
-	bind(options, "<C-o>", s.closeOptions)
-	options.Handle("<C-c>", func(riffkey.Match) { app.Stop() })
-
-	quit := func(r *riffkey.Router) { r.Handle("<C-c>", func(riffkey.Match) { app.Stop() }) }
+	moveMenu := func(delta int) func() { return func() { s.menuMove(delta) } }
+	bindAll(options, moveMenu(-1), "<Up>", "<C-p>", "k")
+	bindAll(options, moveMenu(1), "<Down>", "<C-n>", "j")
+	bindAll(options, s.menuActivate, "<Enter>", "<Space>", "<Right>")
+	bindAll(options, s.closeOptions, "<Esc>", "<C-o>", "o")
+	quit(options)
 
 	leave := riffkey.NewRouter().NoCounts()
 	bind(leave, "c", s.leaveClone)
@@ -170,30 +188,28 @@ func wire(app *App, s *state) {
 	quit(leave)
 
 	hosts := riffkey.NewRouter().NoCounts()
-	bind(hosts, "<Up>", func() { s.moveHost(-1) })
-	bind(hosts, "<Down>", func() { s.moveHost(1) })
-	bind(hosts, "<C-p>", func() { s.moveHost(-1) })
-	bind(hosts, "<C-n>", func() { s.moveHost(1) })
+	bindAll(hosts, func() { s.moveHost(-1) }, "<Up>", "<C-p>", "k")
+	bindAll(hosts, func() { s.moveHost(1) }, "<Down>", "<C-n>", "j")
 	bind(hosts, "<Enter>", s.confirmHost)
 	bind(hosts, "<Esc>", s.cancelHost)
 	quit(hosts)
 
 	help := riffkey.NewRouter().NoCounts()
-	bind(help, "<Up>", func() { s.helpMove(-1) })
-	bind(help, "<Down>", func() { s.helpMove(1) })
+	bindAll(help, func() { s.helpMove(-1) }, "<Up>", "k")
+	bindAll(help, func() { s.helpMove(1) }, "<Down>", "j")
 	bind(help, "<PageUp>", func() { s.helpMove(-10) })
 	bind(help, "<PageDown>", func() { s.helpMove(10) })
-	bind(help, "<Esc>", s.closeHelp)
-	bind(help, "<F1>", s.closeHelp)
+	bindAll(help, s.closeHelp, "<Esc>", "<F1>", "?")
 	quit(help)
 
 	fatal := riffkey.NewRouter().NoCounts()
 	bind(fatal, "<C-y>", s.openHostSwitch)
+	bind(fatal, "y", s.openHostSwitch)
 	quit(fatal)
 
 	modal := map[mode]*riffkey.Router{
 		modeOptions: options, modeLeave: leave, modeHost: hosts, modeHelp: help, modeFatal: fatal,
-		modeClone: scr.Router(),
+		modeClone: scr.Router(), modeFilter: filter,
 	}
 	s.onMode = func(prev, next mode) {
 		if prev != modeBrowse {
