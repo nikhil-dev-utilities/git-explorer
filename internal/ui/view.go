@@ -2,6 +2,7 @@ package ui
 
 import (
 	. "github.com/kungfusheep/glyph"
+	"github.com/kungfusheep/riffkey"
 )
 
 var modalFill = RGB(0x1c, 0x1c, 0x1c)
@@ -46,6 +47,16 @@ func browseView(s *state) Component {
 	)
 }
 
+func optionsCard(s *state) Component {
+	return VBox.Border(BorderRounded).Title("Options").Fill(modalFill).Padding(1).FitContent()(
+		List(&s.menu).Selection(&s.menuCursor).Render(func(r *menuRow) Component {
+			return HBox(Text(&r.Label), SpaceW(2), Space(), Text(&r.Value).FG(Cyan))
+		}),
+		Text(""),
+		Text("↑↓ move · enter change · esc close").Dim(),
+	)
+}
+
 func fatalView(s *state) Component {
 	return VBox.Grow(1)(
 		Text("git-explorer cannot continue").Bold().FG(Red),
@@ -62,6 +73,7 @@ func fatalView(s *state) Component {
 func rootView(s *state) Component {
 	return VBox.Grow(1)(
 		browseView(s),
+		If(&s.showOptions).Then(Overlay.Backdrop().Centered()(optionsCard(s))),
 		If(&s.showFatal).Then(Overlay.Backdrop().Centered()(VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(fatalView(s)))),
 		If(&s.showTooNarrow).Then(Overlay.Backdrop().Centered()(VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(Text("terminal too narrow: widen to 60+ columns")))),
 	)
@@ -69,29 +81,56 @@ func rootView(s *state) Component {
 
 // wire installs the view and key handling. FilterList registers its own text input and
 // <C-n>/<C-p>/<C-d>/<C-u> on the shared view router (last list wins), so every key is
-// re-registered here after SetView, focus-aware, which overrides them.
+// re-registered here after SetView, focus-aware, which overrides them. Each modal mode
+// owns a router pushed on entry and popped on exit, so browse keys are inert under it.
 func wire(app *App, s *state) {
 	app.SetView(rootView(s))
 	app.OnResize(func(w, h int) { s.resize(w, h) })
 
-	r := app.Router()
-	r.NoCounts()
-	r.HandleUnmatched(s.handleText)
+	bind := func(r *riffkey.Router, pattern string, fn func()) {
+		r.Handle(pattern, func(riffkey.Match) { fn(); app.RequestRender() })
+	}
 
-	app.Handle("<Up>", func() { s.move(-1) })
-	app.Handle("<C-p>", func() { s.move(-1) })
-	app.Handle("<Down>", func() { s.move(1) })
-	app.Handle("<C-n>", func() { s.move(1) })
-	app.Handle("<PageUp>", func() { s.page(-1) })
-	app.Handle("<PageDown>", func() { s.page(1) })
-	app.Handle("<Enter>", s.enter)
-	app.Handle("<Right>", s.enter)
-	app.Handle("<Esc>", s.back)
-	app.Handle("<Left>", s.back)
-	app.Handle("<Tab>", func() { s.tick(1) })
-	app.Handle("<S-Tab>", func() { s.tick(-1) })
-	app.Handle("<C-a>", s.tickAllMatching)
-	app.Handle("<C-c>", app.Stop)
+	base := app.Router()
+	base.NoCounts()
+	base.HandleUnmatched(s.handleText)
+	bind(base, "<Up>", func() { s.move(-1) })
+	bind(base, "<C-p>", func() { s.move(-1) })
+	bind(base, "<Down>", func() { s.move(1) })
+	bind(base, "<C-n>", func() { s.move(1) })
+	bind(base, "<PageUp>", func() { s.page(-1) })
+	bind(base, "<PageDown>", func() { s.page(1) })
+	bind(base, "<Enter>", s.enter)
+	bind(base, "<Right>", s.enter)
+	bind(base, "<Esc>", s.back)
+	bind(base, "<Left>", s.back)
+	bind(base, "<Tab>", func() { s.tick(1) })
+	bind(base, "<S-Tab>", func() { s.tick(-1) })
+	bind(base, "<C-a>", s.tickAllMatching)
+	bind(base, "<C-o>", s.openOptions)
+	base.Handle("<C-c>", func(riffkey.Match) { app.Stop() })
+
+	options := riffkey.NewRouter().NoCounts()
+	bind(options, "<Up>", func() { s.menuMove(-1) })
+	bind(options, "<Down>", func() { s.menuMove(1) })
+	bind(options, "<C-p>", func() { s.menuMove(-1) })
+	bind(options, "<C-n>", func() { s.menuMove(1) })
+	bind(options, "<Enter>", s.menuActivate)
+	bind(options, "<Space>", s.menuActivate)
+	bind(options, "<Right>", s.menuActivate)
+	bind(options, "<Esc>", s.closeOptions)
+	bind(options, "<C-o>", s.closeOptions)
+	options.Handle("<C-c>", func(riffkey.Match) { app.Stop() })
+
+	modal := map[mode]*riffkey.Router{modeOptions: options}
+	s.onMode = func(prev, next mode) {
+		if prev != modeBrowse {
+			app.PopRouter()
+		}
+		if r := modal[next]; next != modeBrowse && r != nil {
+			app.PushRouter(r)
+		}
+	}
 }
 
 // Run builds the app and blocks until the user quits.

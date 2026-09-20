@@ -211,3 +211,96 @@ func TestShortTerminalKeepsBordersAndFooterIntact(t *testing.T) {
 		}
 	}
 }
+
+func TestOptionsMenuCyclesFacetsAndOwnsTheKeysWhileOpen(t *testing.T) {
+	h := mount(t, defaultFake(), true)
+	h.render(110, 22)
+	h.press(riffkey.SpecialEnter) // acme
+	h.render(110, 22)
+
+	h.ctrl('o')
+	out := h.render(110, 22)
+	for _, want := range []string{"Options", "Host", "github.com", "Repos: archived", "hide", "Org pane width", "Reload focused pane"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("options card missing %q:\n%s", want, out)
+		}
+	}
+
+	h.typed("xyz") // browse typing must be inert under the menu
+	if h.s.query[focusRepos] != "" {
+		t.Errorf("typing leaked to the filter under the menu: %q", h.s.query)
+	}
+
+	h.press(riffkey.SpecialDown, riffkey.SpecialDown, riffkey.SpecialDown) // -> Repos: archived
+	h.press(riffkey.SpecialEnter)
+	if h.s.archived != triShow || len(repoNames(h.s)) != 4 {
+		t.Errorf("archived=%v repos=%v, want archived shown (4 repos)", h.s.archived, repoNames(h.s))
+	}
+	if !strings.Contains(h.render(110, 22), "archived: show") {
+		t.Error("chip line did not follow the facet")
+	}
+
+	h.press(riffkey.SpecialEscape)
+	if h.s.mode != modeBrowse {
+		t.Fatalf("mode = %v after Esc", h.s.mode)
+	}
+	h.typed("tf")
+	if h.s.query[focusRepos] != "tf" {
+		t.Errorf("filter typing did not resume after closing the menu: %q", h.s.query)
+	}
+}
+
+func TestOptionsRowsCoverEveryFacetAndReload(t *testing.T) {
+	f := defaultFake()
+	s := newTest(t, f, true)
+	s.enter()
+
+	s.openOptions()
+	labels := []string{}
+	for _, r := range s.menu {
+		labels = append(labels, r.Label)
+	}
+	want := "Host,Orgs: affiliation,Orgs: sort,Repos: archived,Repos: forks,Repos: visibility,Repos: sort,Org pane width,Reload focused pane"
+	if join(labels) != want {
+		t.Fatalf("rows = %s", join(labels))
+	}
+
+	activate := func(label string) {
+		for i, r := range s.menu {
+			if r.Label == label {
+				s.menuCursor = i
+			}
+		}
+		s.menuActivate()
+	}
+	activate("Orgs: affiliation")
+	if s.orgAff != affOwner || join(orgNames(s)) != "acme" {
+		t.Errorf("affiliation owner: %v %v", s.orgAff, orgNames(s))
+	}
+	activate("Orgs: sort")
+	if s.orgSort != sortAffiliation {
+		t.Errorf("orgSort = %v", s.orgSort)
+	}
+	activate("Repos: forks")
+	activate("Repos: visibility")
+	activate("Repos: sort")
+	if s.fork != triShow || s.vis != visPublic || s.repoSort != sortActivity {
+		t.Errorf("fork=%v vis=%v sort=%v", s.fork, s.vis, s.repoSort)
+	}
+	activate("Org pane width")
+	if s.orgWidthIdx != 2 {
+		t.Errorf("orgWidthIdx = %d", s.orgWidthIdx)
+	}
+
+	calls := len(f.repoCalls)
+	activate("Reload focused pane")
+	if s.mode != modeBrowse || len(f.repoCalls) != calls+1 {
+		t.Errorf("reload: mode=%v repoCalls=%d->%d", s.mode, calls, len(f.repoCalls))
+	}
+
+	s.openOptions()
+	activate("Host")
+	if s.mode != modeHost {
+		t.Errorf("Host row did not open the host switcher: %v", s.mode)
+	}
+}

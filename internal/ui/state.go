@@ -88,6 +88,9 @@ type state struct {
 	fatalErr     error
 	transientErr error
 
+	menu       []menuRow
+	menuCursor int
+
 	// filter text per pane, edited by the always-focused text handler
 	query [2]string
 	cur   [2]int
@@ -619,6 +622,8 @@ func (s *state) sync() {
 		})
 	}
 
+	s.menu = s.buildMenu()
+
 	s.footer = fmt.Sprintf(" host: %s · %d selected", s.activeHost().Name, s.selectionCount())
 	s.hint = s.keyHints()
 	s.status = ""
@@ -666,4 +671,62 @@ func (s *state) keyHints() string {
 		return "type filter · ↑↓ move · tab tick · ^a all · enter clone · esc back · ^o options · F1 help"
 	}
 	return "type filter · ↑↓ move · enter open · esc clear · ^o options · F1 help · ^c quit"
+}
+
+// ---- options menu ----------------------------------------------------------------
+
+// menuRow is one line of the options menu: a label, its current value, and what
+// activating it does (usually cycling the value).
+type menuRow struct {
+	Label string
+	Value string
+	act   func()
+}
+
+func (s *state) buildMenu() []menuRow {
+	return []menuRow{
+		{"Host", s.activeHost().Name, s.openHostSwitch},
+		{"Orgs: affiliation", s.orgAff.String(), func() { s.orgAff = s.orgAff.next(); s.rebuildOrgs() }},
+		{"Orgs: sort", s.orgSort.String(), func() { s.orgSort = otherSort(s.orgSort, sortAffiliation); s.rebuildOrgs() }},
+		{"Repos: archived", s.archived.String(), func() { s.archived = s.archived.next(); s.rebuildRepos() }},
+		{"Repos: forks", s.fork.String(), func() { s.fork = s.fork.next(); s.rebuildRepos() }},
+		{"Repos: visibility", s.vis.String(), func() { s.vis = s.vis.next(); s.rebuildRepos() }},
+		{"Repos: sort", s.repoSort.String(), func() { s.repoSort = otherSort(s.repoSort, sortActivity); s.rebuildRepos() }},
+		{"Org pane width", fmt.Sprint(orgPaneWidths[s.orgWidthIdx]), s.cycleOrgWidth},
+		{"Reload focused pane", "", func() { s.setMode(modeBrowse); s.reload() }},
+	}
+}
+
+func (s *state) openOptions() {
+	if s.mode == modeBrowse {
+		s.setMode(modeOptions)
+	}
+}
+
+func (s *state) closeOptions() {
+	if s.mode == modeOptions {
+		s.setMode(modeBrowse)
+	}
+}
+
+func (s *state) menuMove(delta int) {
+	if s.mode == modeOptions {
+		s.menuCursor = min(max(s.menuCursor+delta, 0), len(s.menu)-1)
+	}
+}
+
+func (s *state) menuActivate() {
+	if s.mode != modeOptions {
+		return
+	}
+	s.menu[s.menuCursor].act()
+	s.sync()
+}
+
+// otherSort flips between name and the pane's alternative sort.
+func otherSort(cur, alt sortMode) sortMode {
+	if cur == sortName {
+		return alt
+	}
+	return sortName
 }
