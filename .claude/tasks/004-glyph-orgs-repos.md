@@ -1,6 +1,6 @@
 # 004 - Glyph Orgs/Repos view: full shell swap
 
-- status: in_progress
+- status: completed
 - last updated: 2026-09-20
 
 ## Request
@@ -19,10 +19,10 @@ User approved (plan: `/Users/nikhil/.claude/plans/lets-redo-the-orgs-happy-truff
 1. [x] Step 0 spike (scratchpad): two FilterLists, routing override, SetQuery/Refresh, Stream
 2. [x] pure state (merged into `internal/ui/state.go`, no separate `browse` pkg)
 3. [x] `internal/ui` Glyph browse view + resize tests
-4. [ ] Options menu + facets
-5. [ ] Leave prompt / Host switch / Help / Fatal overlays
-6. [ ] Embed clone screen (mountable), drop tea.Exec + tty hacks
-7. [ ] Cutover main.go, delete internal/tui + bubbletea deps, docs (README, DESIGN, ADR-0008)
+4. [x] Options menu + facets
+5. [x] Leave prompt / Host switch / Help / Fatal overlays
+6. [x] Embed clone screen (mountable), drop tea.Exec + tty hacks
+7. [x] Cutover main.go, delete internal/tui + bubbletea deps, docs (README, DESIGN, ADR-0008)
 
 `internal/tui` stays compiling until step 7.
 
@@ -47,3 +47,16 @@ User approved (plan: `/Users/nikhil/.claude/plans/lets-redo-the-orgs-happy-truff
   - Rows: avoid `HBox.Gap` with `If` children (an empty branch still gets a gap, clipping the
     last column by one); use explicit `SpaceW(1)`.
   - `VBox.Title` is static: titles that change (repo pane) are a `Text(&title)` inside the box.
+
+## Outcome
+
+- Done and committed on v2: `internal/ui` (state, view, keymap, options/host/help/leave/fatal
+  cards), embedded clone screen (`glyphclone.Embed`), cutover in `cmd/git-explorer`,
+  `internal/tui` and bubbletea/lipgloss/teatest removed, tty/TIOCSTI workarounds removed,
+  README/DESIGN/ADR-0008 updated.
+- Verified in a real pty (pyte) with a fake forge: streaming Orgs with spinner, per-pane
+  filter, focus, ticks, live resize (reflow, age then badges shed, too-narrow card), options
+  overlay, clone screen + run, back to browse, `^c` exits status 0.
+- Not verified: Linux; real `gh` end to end (needs the user's credentials).
+- Follow-ups worth filing: Tab completion in the clone path prompt; unfocused pane still
+  shows a `>` marker (focus is border colour only); non-ASCII filter/path editing untested.

@@ -1,6 +1,7 @@
 # v2: rewriting the TUI on Glyph — feasibility study
 
-Status: study only. No production code changed. Branch: `v2`.
+Status: this study led to the port; see ADR-0008 and `.claude/tasks/004-glyph-orgs-repos.md`. The
+port is complete on branch `v2` (bubbletea removed). Text below is the original study.
 
 ## Verdict
 
