@@ -2,7 +2,6 @@ package glyphclone
 
 import (
 	"io"
-	"os"
 
 	. "github.com/kungfusheep/glyph"
 	"github.com/kungfusheep/riffkey"
@@ -38,48 +37,7 @@ func runView(s *state, logr io.Reader) Component {
 	)
 }
 
-// Launch runs the clone screen to completion and blocks until the user leaves it. It
-// takes over the terminal, so a bubbletea shell must release it first (tea.Exec).
-func Launch(in Request) (Response, error) {
-	// Glyph's App.Stop closes os.Stdin. Give it a private /dev/tty handle so the
-	// bubbletea shell's own stdin survives this screen and can resume afterwards.
-	// wake (a second handle, since Stop closes the first) unblocks Glyph's pending
-	// read on Stop; see wakeRead.
-	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
-	if err != nil {
-		return Response{}, err
-	}
-	defer tty.Close()
-	waker, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
-	if err != nil {
-		return Response{}, err
-	}
-	defer waker.Close()
-	orig := os.Stdin
-	os.Stdin = tty
-	defer func() { os.Stdin = orig }()
-
-	pr, pw := io.Pipe()
-	defer pr.Close()
-	defer pw.Close()
-
-	app := NewApp()
-	stop := func() {
-		app.Stop()
-		wakeRead(waker)
-	}
-	s := newState(in, pw, func(f func()) { go f() }, app.Apply, app.RequestRender, stop)
-	wire(app, s, pr)
-
-	err = app.Run()
-	return s.output(), err
-}
-
-// wire uses one view with the dialog/run switch inside it, rather than named views:
-// Glyph does not expose a named view's template, which would make it untestable
-// headlessly. Every handler is a no-op outside its own phase (see state).
-// bindKeys registers the dialog and run keys through bind, so the standalone app and
-// the embedded Screen share one table. List navigation is ours (s.move) rather than the
+// bindKeys registers the dialog and run keys through bind. List navigation is ours (s.move) rather than the
 // List's BindNav, which would register j/k/g/G on the host app's base router.
 func bindKeys(s *state, bind func(pattern string, fn func())) {
 	for _, k := range []string{"j", "<Down>"} {
@@ -115,13 +73,4 @@ func promptRouter(s *state) *riffkey.Router {
 	prompt.Handle("<C-c>", func(riffkey.Match) { s.back() })
 	prompt.TextInput(&s.field.Value, &s.field.Cursor)
 	return prompt
-}
-
-func wire(app *App, s *state, logr io.Reader) {
-	prompt := promptRouter(s)
-	s.enterPrompt = func() { app.PushRouter(prompt) }
-	s.leavePrompt = app.PopRouter
-
-	app.SetView(VBox.Grow(1)(If(&s.showRun).Then(runView(s, logr)).Else(dialogView(s))))
-	bindKeys(s, func(pattern string, fn func()) { app.Handle(pattern, fn) })
 }

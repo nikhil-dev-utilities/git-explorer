@@ -1,9 +1,8 @@
-// Package glyphclone is git-explorer's Glyph-based clone screen: a folder browser that
-// picks the Target with a live pre-flight preview, then a streaming deploy-log of the
-// Clone Run. It is the only package that imports Glyph, and it runs as a self-contained
-// program (see Launch) so the bubbletea shell can hand the terminal over to it.
+// Package glyphclone is git-explorer's clone screen: a folder browser that picks the
+// Target with a live pre-flight preview, then a streaming deploy-log of the Clone Run.
+// It is mounted inside the shell's Glyph app (see Embed).
 //
-// state.go holds all behaviour with no Glyph import, so it is tested directly.
+// state.go holds the behaviour with no terminal dependency, so it is tested directly.
 package glyphclone
 
 import (
