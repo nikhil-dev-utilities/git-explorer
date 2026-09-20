@@ -91,6 +91,12 @@ type state struct {
 	menu       []menuRow
 	menuCursor int
 
+	hostRows   []hostRow
+	helpRows   []helpRow
+	helpCursor int
+	helpH      int16
+	leaveText  string
+
 	// filter text per pane, edited by the always-focused text handler
 	query [2]string
 	cur   [2]int
@@ -152,6 +158,7 @@ func newState(d Deps, spawn, apply func(func()), refresh func()) *state {
 		s.text[i] = riffkey.NewTextHandler(&s.query[i], &s.cur[i])
 		s.text[i].OnChange = func(q string) { s.setQuery(focus(i), q) }
 	}
+	s.helpRows = helpRows()
 	s.resize(s.width, s.height)
 	s.loadOrgs()
 	return s
@@ -623,6 +630,20 @@ func (s *state) sync() {
 	}
 
 	s.menu = s.buildMenu()
+	s.hostRows = make([]hostRow, len(s.hosts))
+	for i, h := range s.hosts {
+		s.hostRows[i] = hostRow{Mark: " ", Name: h.Name}
+		if i == s.hostIdx {
+			s.hostRows[i].Mark = "*"
+		}
+	}
+	n := s.selectionCount()
+	noun := "repos"
+	if n == 1 {
+		noun = "repo"
+	}
+	s.leaveText = fmt.Sprintf("%d %s selected in %s", n, noun, s.currentOrg.Name)
+	s.helpH = int16(min(len(s.helpRows)+4, max(s.height-2, 5)))
 
 	s.footer = fmt.Sprintf(" host: %s · %d selected", s.activeHost().Name, s.selectionCount())
 	s.hint = s.keyHints()
@@ -729,4 +750,30 @@ func otherSort(cur, alt sortMode) sortMode {
 		return alt
 	}
 	return sortName
+}
+
+type hostRow struct {
+	Mark string
+	Name string
+}
+
+// ---- help ------------------------------------------------------------------------
+
+func (s *state) openHelp() {
+	if s.mode == modeBrowse {
+		s.helpCursor = 0
+		s.setMode(modeHelp)
+	}
+}
+
+func (s *state) closeHelp() {
+	if s.mode == modeHelp {
+		s.setMode(modeBrowse)
+	}
+}
+
+func (s *state) helpMove(delta int) {
+	if s.mode == modeHelp {
+		s.helpCursor = min(max(s.helpCursor+delta, 0), len(s.helpRows)-1)
+	}
 }

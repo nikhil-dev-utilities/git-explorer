@@ -304,3 +304,100 @@ func TestOptionsRowsCoverEveryFacetAndReload(t *testing.T) {
 		t.Errorf("Host row did not open the host switcher: %v", s.mode)
 	}
 }
+
+func TestLeavePromptCardAndItsKeys(t *testing.T) {
+	h := mount(t, defaultFake(), true)
+	h.render(110, 20)
+	h.press(riffkey.SpecialEnter)
+	h.render(110, 20)
+	h.press(riffkey.SpecialTab)
+	h.press(riffkey.SpecialEscape)
+
+	out := h.render(110, 20)
+	if h.s.mode != modeLeave || !strings.Contains(out, "1 repo selected in acme") || !strings.Contains(out, "c clone now") {
+		t.Fatalf("leave card missing (mode %v):\n%s", h.s.mode, out)
+	}
+	h.typed("x") // inert
+	if h.s.query[focusRepos] != "" {
+		t.Error("typing leaked under the leave prompt")
+	}
+	h.typed("d")
+	if h.s.mode != modeBrowse || h.s.selectionCount() != 0 || h.s.focus != focusOrgs {
+		t.Errorf("d: mode=%v sel=%d focus=%v", h.s.mode, h.s.selectionCount(), h.s.focus)
+	}
+}
+
+func TestHostSwitchThroughOptionsReloadsFromTheNewHost(t *testing.T) {
+	f := defaultFake()
+	h := mount(t, f, true)
+	h.render(110, 22)
+
+	h.ctrl('o')
+	h.press(riffkey.SpecialEnter) // Host row
+	out := h.render(110, 22)
+	if h.s.mode != modeHost || !strings.Contains(out, "Hosts") || !strings.Contains(out, "* github.com") || !strings.Contains(out, "ghe.corp") {
+		t.Fatalf("host card (mode %v):\n%s", h.s.mode, out)
+	}
+	h.press(riffkey.SpecialDown, riffkey.SpecialEnter)
+	if h.s.mode != modeBrowse || h.s.activeHost().Name != "ghe.corp" || join(orgNames(h.s)) != "corp" {
+		t.Errorf("mode=%v host=%s orgs=%v", h.s.mode, h.s.activeHost().Name, orgNames(h.s))
+	}
+	if !strings.Contains(h.render(110, 22), "host: ghe.corp") {
+		t.Error("footer did not switch host")
+	}
+	h.typed("co") // browse keys are back
+	if h.s.query[focusOrgs] != "co" {
+		t.Errorf("typing did not resume: %q", h.s.query)
+	}
+}
+
+func TestHelpOverlayListsTheKeymapAndScrolls(t *testing.T) {
+	h := mount(t, defaultFake(), true)
+	h.render(120, 40)
+	h.press(riffkey.SpecialF1)
+	out := h.render(120, 40)
+	for _, want := range []string{"Help", "Browse", "tick every Repo matching the filter", "LeavePrompt", "fzf:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help missing %q:\n%s", want, out)
+		}
+	}
+	h.press(riffkey.SpecialDown, riffkey.SpecialDown)
+	if h.s.helpCursor != 2 {
+		t.Errorf("helpCursor = %d", h.s.helpCursor)
+	}
+	h.press(riffkey.SpecialEscape)
+	if h.s.mode != modeBrowse {
+		t.Errorf("mode = %v", h.s.mode)
+	}
+	if got := h.render(120, 8); strings.Count(got, "\n")+1 > 8 {
+		t.Errorf("help overflows an 8 row terminal:\n%s", got)
+	}
+}
+
+func TestFatalOffersHostSwitchAndReturnsToFatalOnCancel(t *testing.T) {
+	f := defaultFake()
+	f.errByHost = map[string]error{"github.com": &forge.Error{Kind: forge.ErrKindFatal, Message: "not authenticated: run gh auth login"}}
+	h := mount(t, f, true)
+	if h.s.mode != modeFatal {
+		t.Fatalf("mode = %v", h.s.mode)
+	}
+	h.typed("zz") // inert under the fatal card
+	if h.s.query[focusOrgs] != "" {
+		t.Error("typing leaked under the fatal card")
+	}
+
+	h.ctrl('y')
+	if h.s.mode != modeHost {
+		t.Fatalf("^y: mode = %v", h.s.mode)
+	}
+	h.press(riffkey.SpecialEscape)
+	if h.s.mode != modeFatal {
+		t.Errorf("cancel should return to the fatal card, got %v", h.s.mode)
+	}
+
+	h.ctrl('y')
+	h.press(riffkey.SpecialDown, riffkey.SpecialEnter)
+	if h.s.mode != modeBrowse || join(orgNames(h.s)) != "corp" || h.s.fatalErr != nil {
+		t.Errorf("switch away from the broken host: mode=%v orgs=%v fatal=%v", h.s.mode, orgNames(h.s), h.s.fatalErr)
+	}
+}

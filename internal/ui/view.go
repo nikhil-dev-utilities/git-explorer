@@ -57,6 +57,33 @@ func optionsCard(s *state) Component {
 	)
 }
 
+func leaveCard(s *state) Component {
+	return VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(
+		Text(&s.leaveText).Bold(),
+		Text(""),
+		Text("c clone now · d discard · esc stay").Dim(),
+	)
+}
+
+func hostCard(s *state) Component {
+	return VBox.Border(BorderRounded).Title("Hosts").Fill(modalFill).Padding(1).FitContent()(
+		List(&s.hostRows).Selection(&s.hostCursor).Render(func(r *hostRow) Component {
+			return HBox(Text(&r.Mark), SpaceW(1), Text(&r.Name))
+		}),
+		Text(""),
+		Text("↑↓ move · enter switch · esc cancel · * active").Dim(),
+	)
+}
+
+func helpCard(s *state) Component {
+	return VBox.Border(BorderRounded).Title("Help").Fill(modalFill).Padding(1).Height(&s.helpH)(
+		List(&s.helpRows).Selection(&s.helpCursor).Marker("").Render(func(r *helpRow) Component {
+			return HBox(Text(&r.Key).Width(16), Text(&r.Text))
+		}),
+		Text("↑↓ scroll · esc close").Dim(),
+	)
+}
+
 func fatalView(s *state) Component {
 	return VBox.Grow(1)(
 		Text("git-explorer cannot continue").Bold().FG(Red),
@@ -74,6 +101,9 @@ func rootView(s *state) Component {
 	return VBox.Grow(1)(
 		browseView(s),
 		If(&s.showOptions).Then(Overlay.Backdrop().Centered()(optionsCard(s))),
+		If(&s.showLeave).Then(Overlay.Backdrop().Centered()(leaveCard(s))),
+		If(&s.showHost).Then(Overlay.Backdrop().Centered()(hostCard(s))),
+		If(&s.showHelp).Then(Overlay.Backdrop().Centered()(helpCard(s))),
 		If(&s.showFatal).Then(Overlay.Backdrop().Centered()(VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(fatalView(s)))),
 		If(&s.showTooNarrow).Then(Overlay.Backdrop().Centered()(VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(Text("terminal too narrow: widen to 60+ columns")))),
 	)
@@ -108,6 +138,7 @@ func wire(app *App, s *state) {
 	bind(base, "<S-Tab>", func() { s.tick(-1) })
 	bind(base, "<C-a>", s.tickAllMatching)
 	bind(base, "<C-o>", s.openOptions)
+	bind(base, "<F1>", s.openHelp)
 	base.Handle("<C-c>", func(riffkey.Match) { app.Stop() })
 
 	options := riffkey.NewRouter().NoCounts()
@@ -122,7 +153,39 @@ func wire(app *App, s *state) {
 	bind(options, "<C-o>", s.closeOptions)
 	options.Handle("<C-c>", func(riffkey.Match) { app.Stop() })
 
-	modal := map[mode]*riffkey.Router{modeOptions: options}
+	quit := func(r *riffkey.Router) { r.Handle("<C-c>", func(riffkey.Match) { app.Stop() }) }
+
+	leave := riffkey.NewRouter().NoCounts()
+	bind(leave, "c", s.leaveClone)
+	bind(leave, "d", s.leaveDiscard)
+	bind(leave, "<Esc>", s.leaveStay)
+	quit(leave)
+
+	hosts := riffkey.NewRouter().NoCounts()
+	bind(hosts, "<Up>", func() { s.moveHost(-1) })
+	bind(hosts, "<Down>", func() { s.moveHost(1) })
+	bind(hosts, "<C-p>", func() { s.moveHost(-1) })
+	bind(hosts, "<C-n>", func() { s.moveHost(1) })
+	bind(hosts, "<Enter>", s.confirmHost)
+	bind(hosts, "<Esc>", s.cancelHost)
+	quit(hosts)
+
+	help := riffkey.NewRouter().NoCounts()
+	bind(help, "<Up>", func() { s.helpMove(-1) })
+	bind(help, "<Down>", func() { s.helpMove(1) })
+	bind(help, "<PageUp>", func() { s.helpMove(-10) })
+	bind(help, "<PageDown>", func() { s.helpMove(10) })
+	bind(help, "<Esc>", s.closeHelp)
+	bind(help, "<F1>", s.closeHelp)
+	quit(help)
+
+	fatal := riffkey.NewRouter().NoCounts()
+	bind(fatal, "<C-y>", s.openHostSwitch)
+	quit(fatal)
+
+	modal := map[mode]*riffkey.Router{
+		modeOptions: options, modeLeave: leave, modeHost: hosts, modeHelp: help, modeFatal: fatal,
+	}
 	s.onMode = func(prev, next mode) {
 		if prev != modeBrowse {
 			app.PopRouter()
@@ -130,6 +193,10 @@ func wire(app *App, s *state) {
 		if r := modal[next]; next != modeBrowse && r != nil {
 			app.PushRouter(r)
 		}
+	}
+	// a load that failed fatally before wire ran (synchronous seams in tests)
+	if s.mode != modeBrowse {
+		s.onMode(modeBrowse, s.mode)
 	}
 }
 

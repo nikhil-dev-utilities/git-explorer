@@ -8,11 +8,12 @@ import (
 )
 
 type fakeForge struct {
-	mu       sync.Mutex
-	pages    map[string][]forge.OrgPage // by Host name
-	orgsErr  error
-	repos    map[string][]forge.Repo // by Org name
-	reposErr error
+	mu        sync.Mutex
+	pages     map[string][]forge.OrgPage // by Host name
+	orgsErr   error
+	errByHost map[string]error
+	repos     map[string][]forge.Repo // by Org name
+	reposErr  error
 
 	orgCalls  []string
 	repoCalls []string
@@ -22,6 +23,9 @@ func (f *fakeForge) ListOrgs(_ context.Context, host forge.Host) (<-chan forge.O
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.orgCalls = append(f.orgCalls, host.Name)
+	if e := f.errByHost[host.Name]; e != nil {
+		return nil, e
+	}
 	if f.orgsErr != nil {
 		return nil, f.orgsErr
 	}
