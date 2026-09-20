@@ -17,6 +17,14 @@ type Result struct {
 	Err error
 }
 
+// Event reports one Repo's progress during RunProgress. Done is false when the clone
+// is about to start (Result carries only Repo and Dest) and true once the Repo's final
+// Result is known; every Repo gets exactly one Done event.
+type Event struct {
+	Result Result
+	Done   bool
+}
+
 // Run classifies every Repo in repos against target, then clones whichever classify
 // as Cloned — bounded to at most parallelism concurrent git clone subprocesses at any
 // time, never exceeded even transiently. It never aborts on a single failure: every
@@ -32,6 +40,16 @@ type Result struct {
 // with an error, or killed by the cancellation) — it does not wait on work that was
 // never started.
 func Run(ctx context.Context, target string, repos []Repo, orgSubdir bool, parallelism int) []Result {
+	return RunProgress(ctx, target, repos, orgSubdir, parallelism, nil)
+}
+
+// RunProgress is Run plus a per-Repo callback, for callers that want live progress.
+// onEvent may be nil and is called from multiple goroutines, so it must be safe for
+// concurrent use and should not block for long.
+func RunProgress(ctx context.Context, target string, repos []Repo, orgSubdir bool, parallelism int, onEvent func(Event)) []Result {
+	if onEvent == nil {
+		onEvent = func(Event) {}
+	}
 	slog.InfoContext(ctx, "clone run starting", "target", target, "repos", len(repos), "parallelism", parallelism, "org_subdir", orgSubdir)
 
 	results := make([]Result, len(repos))
@@ -54,6 +72,7 @@ func Run(ctx context.Context, target string, repos []Repo, orgSubdir bool, paral
 		// below, so they get their progress line here instead — every Repo gets one
 		// as soon as its outcome is known, not just the ones that hit git.
 		logRepoOutcome(ctx, results[i])
+		onEvent(Event{Result: results[i], Done: true})
 	}
 
 	if parallelism < 1 {
@@ -89,8 +108,10 @@ dispatch:
 		go func(j job) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			onEvent(Event{Result: Result{Repo: j.repo, Dest: j.dest}})
 			results[j.index].Err = performClone(ctx, j.repo.CloneURL, j.dest)
 			logRepoOutcome(ctx, results[j.index])
+			onEvent(Event{Result: results[j.index], Done: true})
 		}(j)
 	}
 	wg.Wait()

@@ -3,17 +3,18 @@ package main
 import (
 	"path/filepath"
 
+	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
-	"github.com/nikhil-dev-utilities/git-explorer/internal/tui"
+	"github.com/nikhil-dev-utilities/git-explorer/internal/ui"
 )
 
-// buildModel constructs a tui.Model from an already-resolved Config, a real (or fake,
-// in tests) forge.Forge, and the two composition-root adapters. It performs no
-// filesystem, network, or environment access of its own, which is what makes it
-// directly unit-testable. hostsUserConfigured is threaded straight through to
-// tui.New — see that field's own doc comment on tui.Model.
-func buildModel(f forge.Forge, cfg config.Config, hostsUserConfigured bool, preview tui.ClonePreviewFunc, runner tui.CloneRunnerFunc) tui.Model {
+// buildDeps turns an already-resolved Config and a real (or fake, in tests) forge.Forge
+// into the ui's dependencies, adding the composition-root pre-flight classifier and
+// streaming Clone Run. It performs no filesystem, network, or environment access of its
+// own, which is what makes it directly unit-testable. hostsUserConfigured says whether
+// the Hosts came from an explicit hosts: list — see ui.Deps.
+func buildDeps(f forge.Forge, cfg config.Config, hostsUserConfigured bool) ui.Deps {
 	hosts := make([]forge.Host, len(cfg.Hosts))
 	for i, h := range cfg.Hosts {
 		hosts[i] = forge.Host{
@@ -23,16 +24,23 @@ func buildModel(f forge.Forge, cfg config.Config, hostsUserConfigured bool, prev
 		}
 	}
 
-	// tui.New always starts with hosts[0] active (see its own doc comment), so that
-	// Host's already-resolved DefaultTarget (config.Load folds the global
-	// clone.default_target fallback into every Host — see resolveHostDefaultTargets)
-	// is the one target pre-filling the clone dialog at launch.
+	// The UI starts on hosts[0], so that Host's already-resolved DefaultTarget
+	// (config.Load folds the global clone.default_target fallback into every Host — see
+	// resolveHostDefaultTargets) is the Target the clone screen opens on.
 	var target string
 	if len(cfg.Hosts) > 0 {
 		target = cfg.Hosts[0].DefaultTarget
 	}
 
-	return tui.New(f, hosts, hostsUserConfigured, preview, runner, target, cfg.Clone.Parallelism)
+	return ui.Deps{
+		Forge:               f,
+		Hosts:               hosts,
+		HostsUserConfigured: hostsUserConfigured,
+		CloneTarget:         target,
+		Parallelism:         cfg.Clone.Parallelism,
+		Preview:             previewClones,
+		Run:                 clone.RunProgress,
+	}
 }
 
 // hostKind infers a Host's Kind from its name. config.HostConfig has no Kind field of

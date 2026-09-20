@@ -6,23 +6,23 @@ is the terminal action. Everything below the Repo level — branches, files, com
 issues — is out of scope.
 
 ```
-┌─ Orgs ─────────────────┬─ Repos: acme ───────────────────────────┐
-│ plat█                  │ tf-                            38 → 6   │
-│ affiliation: any       │ archived: hide · forks: hide · vis: all │
-│────────────────────────│─────────────────────────────────────────│
-│ acme          member   │ [x] tf-network              2d ago      │
-│ platform-eng  collab   │ [x] tf-dns                  1mo ago     │
-│ platform-ops  —      > │ [x] tf-vpc                  3h ago      │
-│ globex        owner    │ [ ] tf-modules   archived   1y ago      │
-└────────────────────────┴─────────────────────────────────────────┘
- host: ghe.corp.internal · 3 selected · ^y host · enter clone · F1 help
+╭─ Orgs ─────────────────╮╭─ Repos: acme · 3 selected ─────────────────╮
+│ sort: name             ││ archived: hide · forks: hide · sort: name  │
+│ > plat                 ││ > tf                                       │
+│   2/38                 ││   6/38                                     │
+│ > platform-eng  collab ││   [x] tf-network                   2d ago  │
+│   platform-ops  none   ││   [x] tf-dns                       1mo ago │
+│                        ││ > [x] tf-vpc                       3h ago  │
+╰────────────────────────╯╰────────────────────────────────────────────╯
+ host: ghe.corp.internal · 3 selected
+ / filter · space tick · a all · x clear · enter clone · tab orgs · r reload · o options · ? help
 ```
 
-Left pane: Orgs (namespaces that own repos — a personal account counts as one too),
-filtered by name and Affiliation. Right pane: Repos of the focused Org. Filter either
-pane by typing — the filter box is always focused, fzf-style — and a leading `/`
-switches it to regex. `^o` (or `alt-a`) selects everything currently matching the
-filter; that one combination is most of the job.
+Left pane: Orgs (namespaces that own repos — a personal account counts as one too).
+Right pane: Repos of the open Org. Both are fuzzy finders: press `/` to filter the focused
+pane (fzf syntax — `'exact`, `^start`, `end$`, `!not`). `a` ticks everything currently
+matching the filter; that one combination is most of the job. The panes reflow live as
+you resize the terminal.
 
 ## Install
 
@@ -56,9 +56,10 @@ both:
 git-explorer
 ```
 
-Start typing to filter Orgs, `Enter` to descend into one, `Tab` to tick Repos, `Enter`
-again to open the clone dialog, `Enter` once more to confirm — everything clones into
-the current directory by default. `F1` shows the full keybinding list at any time.
+Press `/` and type to filter Orgs, `Enter` to keep the filter and `Enter` again to open an Org,
+`Space` to tick Repos, `Enter` to open the clone screen, browse to the target folder, `c` to
+clone — everything clones into the current directory by default. `o` opens the options menu
+and `?` shows every key.
 
 ### Configuration (optional)
 
@@ -75,58 +76,72 @@ by size — `--log-file <path>` or `GIT_EXPLORER_LOG` override it.
 
 ## Keybindings
 
-The ctrl keymap is the documented baseline and works in a stock terminal with no
-configuration. The `alt-` aliases are a bonus for terminals that send Meta for
-Option — never a requirement, and never the *only* way to reach an action. `F1` shows
-this same table inside the app.
+Press `/` to filter the focused pane; until you press Enter (keep the filter) or Esc (clear it),
+every key is text. Everywhere else the keys are plain: `Space` ticks a Repo, `a` ticks all matching,
+`x` clears the Selection, `Tab` switches panes, `r`/`F5` reloads, `o` opens the options menu, `?`
+shows this table. The filter uses [fzf](https://github.com/junegunn/fzf#search-syntax) syntax: plain
+text fuzzy-matches; `'foo` exact, `^foo` starts with, `foo$` ends with, `!foo` not, a space is AND
+and `|` is OR.
 
-| Mode | Key | Alt | Action |
-|---|---|---|---|
-| Browse | type |  | edit the focused pane's filter |
-| Browse | / |  | switch the filter to regex |
-| Browse | ↑/↓, ^p/^n |  | move the cursor |
-| Browse | → |  | Orgs: descend (same as Enter) |
-| Browse | ← |  | Repos: back to Orgs (same as Esc) |
-| Browse | Enter | alt-c | Orgs: descend · Repos: open clone dialog |
-| Browse | Esc |  | Repos: back to Orgs · Orgs: clear filter |
-| Browse | Tab |  | tick/untick the focused Repo |
-| Browse | ^o | alt-a | select all Repos matching the filter |
-| Browse | ^t | alt-x | Orgs: cycle Affiliation · Repos: cycle archived |
-| Browse | ^f | alt-f | Repos: cycle fork |
-| Browse | ^v | alt-v | Repos: cycle visibility |
-| Browse | ^s | alt-s | cycle sort: Orgs: name ⇄ Affiliation · Repos: name ⇄ last activity |
-| Browse | ^g | alt-w | cycle Org pane width |
-| Browse | ^y | alt-h | switch Host |
-| Browse | ^r | alt-r | retry a pane-scoped load failure |
-| Browse | F1 |  | this help screen |
-| Browse | ^c |  | quit |
-| LeavePrompt | c |  | clone now |
-| LeavePrompt | d |  | discard the Selection |
-| LeavePrompt | Esc |  | stay |
-| LeavePrompt | ^c |  | quit |
-| CloneDialog | type |  | edit the target path |
-| CloneDialog | Tab |  | toggle the org-subdirectory path |
-| CloneDialog | Enter |  | confirm and start the Clone Run |
-| CloneDialog | Esc |  | cancel, cloning nothing |
-| CloneDialog | ^c |  | quit |
-| CloneRun | ^c |  | cancel the run (while in flight) · quit (once done) |
-| CloneRun | r |  | retry failed Repos only |
-| CloneRun | Esc |  | done — back to Browse |
-| HostSwitch | ↑/↓, ^p/^n |  | move the cursor |
-| HostSwitch | Enter |  | switch to this Host |
-| HostSwitch | Esc |  | cancel |
-| HostSwitch | ^c |  | quit |
-| Fatal | ^y | alt-h | switch to a different Host |
-| Fatal | ^c |  | quit |
+Repos are fetched only when you open an Org for the first time this session, or when you reload.
+Switching panes, or opening an Org you already viewed, never refetches; the Repo title shows how old
+the data is (`loaded 4m ago`).
 
-`LeavePrompt` guards a non-empty Selection when you try to leave the Repo pane without
-cloning it; `CloneDialog` previews where each Repo will land before you confirm;
-`CloneRun` is the clone itself; `HostSwitch` lists every Host from your config;
-`Fatal` takes over the screen when something (usually `gh` auth) needs fixing before
-anything else can work.
+| Mode | Key | Action |
+|---|---|---|
+| Browse | / | filter the focused pane (fzf: 'exact ^start end$ !not, space = AND) |
+| Browse | ↑/↓, j/k, ^p/^n | move the cursor |
+| Browse | PgUp/PgDn | move a page |
+| Browse | Tab, Shift-Tab | switch between the Org and Repo panes (never reloads) |
+| Browse | Enter, →, l | Orgs: open the Org (the Org already shown is not refetched) |
+| Browse | Enter, c | Repos: clone the ticked Repos |
+| Browse | Esc | clear the pane's filter; with none, Repos back to Orgs |
+| Browse | ←, h | Repos back to Orgs (ticks and filter are kept) |
+| Browse | Space | tick the Repo and move down |
+| Browse | a | tick every Repo matching the filter; again to untick them |
+| Browse | x | clear the whole Selection, including ticks the filter hides |
+| Browse | r, F5 | reload the focused pane from the Forge |
+| Browse | o | options: host, facets, sort, pane width, clear selection, reload |
+| Browse | ?, F1 | this help |
+| Browse | ^c | quit |
+| Filter | type | edit the focused pane's filter (every key is text) |
+| Filter | ↑/↓, ^p/^n, PgUp/PgDn | move the list while typing |
+| Filter | Enter | accept: back to the list, filter kept |
+| Filter | Esc | clear the filter and go back to the list |
+| Filter | ^c | quit |
+| LeavePrompt | c | clone the ticked Repos now |
+| LeavePrompt | d | discard the Selection and continue |
+| LeavePrompt | Esc | stay |
+| LeavePrompt | ^c | quit |
+| CloneDialog | ↑/↓, j/k | move in the folder browser |
+| CloneDialog | Enter | open the highlighted folder |
+| CloneDialog | ←, h, Backspace | go up a folder |
+| CloneDialog | / | type a path to jump to (~, absolute or relative); Enter go · Esc cancel |
+| CloneDialog | n | new folder in this one, made when cloning; Enter create · Esc cancel |
+| CloneDialog | Tab | toggle the org-subdirectory path |
+| CloneDialog | c | start the Clone Run |
+| CloneDialog | Esc, ^c | cancel, cloning nothing |
+| CloneRun | Esc, ^c | cancel the run (while in flight) |
+| CloneRun | r | retry failed Repos only |
+| CloneRun | Esc | done: back to Browse |
+| Options | ↑/↓ | move |
+| Options | Enter, Space | change the value |
+| Options | Esc, o | close |
+| HostSwitch | ↑/↓, ^p/^n | move the cursor |
+| HostSwitch | Enter | switch to this Host |
+| HostSwitch | Esc | cancel |
+| HostSwitch | ^c | quit |
+| Fatal | y | switch to a different Host |
+| Fatal | ^c | quit |
 
-`internal/tui/readme_test.go` asserts this table against the app's own keymap table,
-so it can't silently drift from what the running app actually does.
+`Filter` is the mode after `/`. `LeavePrompt` appears when opening another Org (or switching Host)
+would discard ticked Repos. `Options` is the `o` menu; `CloneDialog` is a folder browser that picks
+the Target and previews where each Repo will land; `CloneRun` streams the clone itself into a live
+log; `HostSwitch` lists every Host from your config; `Fatal` shows when something (usually `gh` auth)
+needs fixing before anything else can work.
+
+`internal/ui/keymap_test.go` asserts this table against the app's own keymap table, so it can't
+silently drift from what the running app actually does.
 
 ## Vocabulary
 

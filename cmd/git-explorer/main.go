@@ -1,6 +1,6 @@
 // Command git-explorer is the composition root: it wires the real gh-cli Forge
-// adapter, resolved Config, and clone.Classify/clone.Run into internal/tui.Model and
-// runs the Bubble Tea program. See DESIGN.md and CONTEXT.md for the vocabulary and
+// adapter, resolved Config, and clone.Classify/clone.RunProgress into internal/ui and
+// runs the Glyph app. See DESIGN.md and CONTEXT.md for the vocabulary and
 // design this wiring implements.
 package main
 
@@ -11,11 +11,9 @@ import (
 	"log/slog"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge/github"
+	"github.com/nikhil-dev-utilities/git-explorer/internal/ui"
 )
 
 func main() {
@@ -58,10 +56,10 @@ func run() error {
 
 	// Only when the user's own config didn't declare hosts: — an explicit list
 	// always wins over discovery, even if it happens to match what discovery would
-	// have found anyway. hostsUserConfigured is also handed to buildModel: a Fatal
+	// have found anyway. hostsUserConfigured is also handed to buildDeps: a Fatal
 	// "not authenticated" failure against a discovered (or last-resort implicit)
 	// Host is treated more gently than one against a Host the user explicitly
-	// configured themselves — see tui.Model's hostsUserConfigured field.
+	// configured themselves — see ui.Deps.HostsUserConfigured.
 	hostsUserConfigured := fileDeclaresHosts(fileBytes)
 	if !hostsUserConfigured {
 		if discovered := github.DiscoverAuthenticatedHosts(env.Getenv); len(discovered) > 0 {
@@ -71,9 +69,5 @@ func run() error {
 
 	slog.SetDefault(config.NewLogger(cfg.Log))
 
-	f := github.New()
-	model := buildModel(f, cfg, hostsUserConfigured, previewClones, clone.Run)
-
-	_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
-	return err
+	return ui.Run(buildDeps(github.New(), cfg, hostsUserConfigured))
 }

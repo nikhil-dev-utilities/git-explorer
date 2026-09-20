@@ -1,5 +1,8 @@
 # The filter box is always focused, so every verb takes a modifier
 
+> **Superseded** by [ADR-0009](./0009-modal-filter-and-on-demand-repo-loading.md): the filter is now modal (`/`).
+> The list of keys that must not be bound still applies while a filter is being typed.
+
 Typing goes straight to the filter and the list narrows as you type, fzf-style, with no
 key needed to begin. The core loop of this tool is "filter, then select everything that
 matched", and this makes that loop as short as it can be.

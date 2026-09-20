@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
@@ -36,46 +35,30 @@ func (fakeForge) ListOrgs(ctx context.Context, host forge.Host) (<-chan forge.Or
 func (fakeForge) ListRepos(ctx context.Context, org forge.Org) ([]forge.Repo, error) { return nil, nil }
 func (fakeForge) CloneURL(repo forge.Repo) string                                    { return "" }
 
-func noopPreview(ctx context.Context, target string, repos []clone.Repo, orgSubdir bool) []clone.Result {
-	return nil
-}
-
-func noopRunner(ctx context.Context, target string, repos []clone.Repo, orgSubdir bool, parallelism int) []clone.Result {
-	return nil
-}
-
-func TestBuildModel_HostsCarryInferredKind(t *testing.T) {
+func TestBuildDeps_HostsKindsTargetAndClonerWiring(t *testing.T) {
 	cfg := config.Config{
 		Hosts: []config.HostConfig{
 			{Name: "github.com", Protocol: "ssh", DefaultTarget: "/src"},
-			{Name: "ghe.corp.internal", Protocol: "https", DefaultTarget: "/src"},
+			{Name: "ghe.corp.internal", Protocol: "https", DefaultTarget: "/work"},
 		},
 		Clone: config.CloneConfig{Parallelism: 4},
 	}
 
-	model := buildModel(fakeForge{}, cfg, true, noopPreview, noopRunner)
+	d := buildDeps(fakeForge{}, cfg, true)
 
-	// Model doesn't expose hosts directly; exercise it indirectly through the one
-	// observable surface buildModel's own callers care about — that New didn't
-	// panic (hosts non-empty) and the resulting View renders without error, proving
-	// construction succeeded end to end. The hostKind table test above already
-	// covers the inference logic itself in isolation.
-	if got := model.View(); got == "" {
-		t.Error("View() = \"\", want a non-empty initial render")
+	if len(d.Hosts) != 2 || d.Hosts[0].Kind != forge.HostPublic || d.Hosts[1].Kind != forge.HostPrivate ||
+		d.Hosts[1].Protocol != "https" {
+		t.Errorf("Hosts = %+v", d.Hosts)
 	}
-}
-
-func TestBuildModel_EmptyHostsPanics(t *testing.T) {
-	// config.Load's defaultConfig always seeds one Host (github.com), so an
-	// hosts-less Config should never reach buildModel in production — this documents
-	// that buildModel doesn't silently swallow that case, it surfaces tui.New's own
-	// documented panic rather than constructing a broken Model.
-	defer func() {
-		if recover() == nil {
-			t.Error("buildModel with zero Hosts did not panic, want it to (tui.New requires non-empty hosts)")
-		}
-	}()
-	buildModel(fakeForge{}, config.Config{}, true, noopPreview, noopRunner)
+	if d.CloneTarget != "/src" {
+		t.Errorf("CloneTarget = %q, want the first Host's DefaultTarget", d.CloneTarget)
+	}
+	if d.Parallelism != 4 || !d.HostsUserConfigured {
+		t.Errorf("Parallelism=%d HostsUserConfigured=%v", d.Parallelism, d.HostsUserConfigured)
+	}
+	if d.Preview == nil || d.Run == nil {
+		t.Error("clone preview and runner must be wired")
+	}
 }
 
 func TestResolveConfigPath(t *testing.T) {

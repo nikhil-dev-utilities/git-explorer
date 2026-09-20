@@ -15,67 +15,77 @@ Two fixed columns, always.
 ## Screen
 
 ```
-┌─ Orgs ─────────────────┬─ Repos: acme ───────────────────────────┐
-│ plat█                  │ tf-                            38 → 6   │
-│ affiliation: any       │ archived: hide · forks: hide · vis: all │
-│────────────────────────│─────────────────────────────────────────│
-│ acme          member   │ [x] tf-network              2d ago      │
-│ platform-eng  collab   │ [x] tf-dns                  1mo ago     │
-│ platform-ops  —      > │ [x] tf-vpc                  3h ago      │
-│ globex        owner    │ [ ] tf-modules   archived   1y ago      │
-└────────────────────────┴─────────────────────────────────────────┘
- host: ghe.corp.internal · 3 selected · ^y host · enter clone · F1 help
+╭─ Orgs ─────────────────╮╭─ Repos: acme · 3 selected ─────────────────╮
+│ sort: name             ││ archived: hide · forks: hide · sort: name  │
+│ > plat                 ││ > tf                                       │
+│   2/38                 ││   6/38                                     │
+│ > platform-eng  collab ││   [x] tf-network                   2d ago  │
+│   platform-ops  none   ││   [x] tf-dns                       1mo ago │
+│                        ││ > [x] tf-vpc                       3h ago  │
+╰────────────────────────╯╰────────────────────────────────────────────╯
+ host: ghe.corp.internal · 3 selected
+ / filter · space tick · a all · x clear · enter clone · tab orgs · r reload · o options · ? help
 ```
 
-- Left pane: Orgs, filtered by name and Affiliation. No repo counts — see ADR-0002.
-- Right pane: Repos of the focused Org, with `pushed_at` and state badges.
-- Implemented as two independently-bordered boxes rather than the single shared frame
-  sketched above — each stretches to the terminal's full height, and the focused
-  pane's border is a distinct color, so focus is legible without reading any text.
-- The single footer line sketched above (`host: ... · 3 selected · ^y host · enter
-  clone · F1 help`) is also implemented differently: a compact one-line status
-  (`host: ... · N selected`) plus a separate, nano/mc-style multi-row key-hint grid
-  below it, listing meaningfully more of the available keys than one line ever had
-  room for. `F1` still owns the exhaustive listing.
-- Sort: name or last activity, in either pane.
-- Filter: substring, case-insensitive. A leading `/` switches the box to regex — a Repo
-  name cannot begin with `/`, so this is unambiguous. Starts-with and ends-with are
-  deliberately absent; `^foo` and `foo$` cover them.
-- `select all matching` is a first-class key. Filter to `tf-`, hit `^o`, done. That one
-  combination is most of the job.
+Each pane is a Glyph `FilterList` (the fuzzy-finder component): a live filter row, an
+`n/total` counter (with a spinner while pages are still streaming in) and the list.
+
+- Left pane: Orgs. No repo counts — see ADR-0002.
+- Right pane: Repos of the open Org, with `pushed_at` age and state badges.
+- Two independently-bordered boxes; the focused pane's border is a distinct colour, so
+  focus is legible without reading any text. Both panes always show their facet/sort line.
+- Filter syntax is fzf's: plain text fuzzy-matches; `'foo` exact, `^foo` starts with,
+  `foo$` ends with, `!foo` not, a space is AND, `|` is OR. Regex is not supported.
+- Facets (Org affiliation; Repo archived / forks / visibility), sort, Org pane width,
+  Host, clear selection and reload live in one menu, `o`, each row showing its current value.
+- Tick all matching is a first-class key: `/tf`, Enter, `a`. That is most of the job.
+- The Repo title shows the age of the data (`loaded 4m ago`); see "Loading" below.
+- The layout is recomputed every frame from the terminal size, so panes reflow live when
+  the window is resized; see "Narrow terminals".
 
 ### Interaction
 
-The filter box is **always focused** — you type and the list narrows, fzf-style, with no
-key needed to begin. The cost is deliberate and paid up front: every verb needs a
-modifier, because every letter is text.
+Filtering is **modal** (ADR-0009): press `/` to type into the focused pane's filter; Enter
+keeps it and returns to the list, Esc clears it. Outside that mode every key is a verb, so
+`Space`, `a`, `x`, `r`, `o` and `?` are bare keys and Tab is free to switch panes. Glyph's
+`FilterList` routes typing to one pane only, so the shell owns key routing and drives the
+focused pane's `FilterList` (`SetQuery`, `SelectNext`, ...) itself; each modal state
+(including filtering) owns a key router pushed on entry and popped on exit.
 
-Several obvious bindings are unavailable and must not be used. `ctrl-h` **is** backspace
-and `ctrl-i` **is** Tab; binding either breaks text editing. `ctrl-m`/`ctrl-[` are
-Enter/Esc. `ctrl-a`, `ctrl-e`, `ctrl-u`, `ctrl-w` and `ctrl-k` are readline
-home/end/kill, which users will expect to work *inside the filter box*. `ctrl-c`,
-`ctrl-z` and `ctrl-d` belong to the terminal.
+| Key | Action |
+|---|---|
+| `/` | filter the focused pane (fzf syntax) |
+| `↑` `↓` `j` `k` `^p` `^n`, `PgUp` `PgDn` | move the cursor |
+| `Tab` / `Shift-Tab` | switch between the Org and Repo panes; never reloads |
+| `Enter` `→` `l` | Orgs: open the Org (already shown: just focus) |
+| `Enter` `c` | Repos: clone the ticked Repos |
+| `Esc` | clear the pane's filter; with none, Repos back to Orgs |
+| `←` `h` | Repos back to Orgs; ticks and filters are kept |
+| `Space` | tick the Repo and move down |
+| `a` | tick every Repo matching the filter; again to untick them |
+| `x` | clear the whole Selection, including ticks the filter hides |
+| `r` `F5` | reload the focused pane from the Forge |
+| `o` | options: Host, facets, sort, pane width, clear selection, reload |
+| `?` `F1` | help |
+| `^c` | quit (a bare `q` would quit mid-word) |
 
-The ctrl keymap is the documented baseline and works in a stock Terminal.app with no
-configuration. The mnemonic alt bindings are additionally bound and cost a few lines in
-the key handler; they are a bonus for terminals that send Meta, never a requirement. Help
-lists both.
+While filtering, every printable key is text; `↑ ↓ ^p ^n PgUp PgDn` still move the list,
+Enter accepts, Esc clears, `^c` quits. The keys people edit text with (`^h ^i ^m ^[ ^a ^e
+^u ^w ^k ^z ^d`) must not be bound in this mode.
 
-| Key | Alt alias | Action |
-|---|---|---|
-| *any printable* | | edit the filter live |
-| `↑` `↓` / `^p` `^n` | | move the cursor |
-| `Tab` / `Shift-Tab` | | tick / tick and move up (fzf convention) |
-| `Enter` | `alt-c` | Orgs: descend to Repos · Repos: open the clone dialog |
-| `Esc` | | Repos: back to Orgs (prompts if the Selection is non-empty) · Orgs: clear filter |
-| `^o` | `alt-a` | select all matching the current filter |
-| `^t` `^f` `^v` | `alt-x` `alt-f` `alt-v` | cycle archived / fork / visibility |
-| `^s` | `alt-s` | cycle sort: name ⇄ last activity |
-| `^g` | `alt-w` | cycle Org pane width |
-| `^y` | `alt-h` | switch Host |
-| `^r` | `alt-r` | reload the current pane |
-| `^c` | | quit |
-| `F1` | | help |
+### Loading
+
+Orgs load at startup, on host switch, and on reload; focusing the Org pane never loads.
+Repos load only when an Org is opened for the first time in a session, or on reload.
+Reopening the Org already shown only moves focus, keeping its filter and ticks. Repos are
+cached per Host and Org **in memory for the session** and served from there when an Org is
+reopened; nothing is written to disk. The title shows the age of the data and `r` / `F5`
+refetch, which is the refresh affordance and staleness indicator ADR-0007 requires of any
+cache. Ticks for Repos that vanished on reload are dropped.
+
+Opening a *different* Org, or switching Host, would discard ticked Repos, so with ticks
+present it first asks: clone them now, discard and continue, or stay (ADR-0005, ADR-0009).
+Moving focus between panes never prompts.
 
 ### Failure surfaces
 
@@ -83,13 +93,13 @@ Errors are scoped to their blast radius rather than funnelled through one widget
 
 - **Fatal** — full screen, with the exact command to fix it. Missing `git` or `gh`, or no
   `gh` auth for the active Host. Nothing else in the app works, so nothing else is shown.
-  Offers `^y` to pick another Host rather than only `^c` to quit. Reserved for a Host the
+  Offers `y` to pick another Host rather than only `^c` to quit. Reserved for a Host the
   user explicitly configured themselves failing auth — a real misconfiguration. When the
   active Host instead came from zero-config discovery (or its last-resort implicit
   `github.com` default), the identical "not authenticated" failure downgrades to
   pane-scoped instead: nothing was misconfigured, there was just nothing to discover yet.
 - **Pane-scoped** — inline in the affected pane, *keeping whatever already loaded*. A
-  progressive load that dies at page 15 keeps its 1,400 Orgs and offers `^r`. Losing them
+  progressive load that dies at page 15 keeps its 1,400 Orgs and offers reload (`r`). Losing them
   to a network blip would be the worst possible response.
 - **Transient** — the status line. Rate limits with a retry countdown, and anything that
   resolves itself by waiting.
@@ -100,19 +110,19 @@ messages, never one blank pane.
 
 ### Narrow terminals
 
-The Org pane is fixed at 28 columns and the Repo pane takes the remainder. As width
-drops, the Repo row sheds the date column first, then state badges, keeping the name
-longest. Below 60 columns the app renders a single "terminal too narrow" message rather
-than a broken layout.
+The Org pane is 34 columns by default (the `o` menu cycles 28/34/42/52) and the Repo pane takes
+the remainder. As width drops, the Repo row sheds the age column first, then state
+badges, keeping the name longest. The Org pane shrinks rather than crushing the Repo
+pane below 20 columns. Below 60 columns a "terminal too narrow" card replaces the
+layout instead of showing a broken one.
 
 ### Short terminals, long lists
 
-The Org and Repo panes window their list to the pane's actual height, keeping the
-cursor visible — centered when there's room, clamped to the list's start or end
-otherwise. This is what makes a Private Host with thousands of Orgs (the exact case
-progressive loading, above, is built for) actually navigable rather than just
-loadable: without it, the cursor still moves correctly but is essentially never
-inside the terminal's visible rows once the list is longer than the pane.
+Each pane has an explicit height (terminal rows minus the three footer rows) and its
+list clips to it, scrolling to keep the cursor visible. That is what makes a Private
+Host with thousands of Orgs (the exact case progressive loading is built for) navigable
+rather than just loadable, and keeps the footer and bottom borders intact on short
+terminals.
 
 ## Data flow
 
@@ -132,7 +142,7 @@ inside the terminal's visible rows once the list is longer than the pane.
     └─ GET /orgs/{org}/repos → name, pushed_at, archived, fork, visibility
 
   Clone Run         modal, one at a time
-    └─ pre-flight Outcome check → confirm dialog → bounded parallel `git clone`
+    └─ pre-flight Outcome check → clone screen (folder browser) → bounded parallel `git clone`
 ```
 
 Nothing is written to disk between runs. No cache, therefore no invalidation, no
@@ -153,25 +163,42 @@ commit to the run:
 A Clone Run never writes into an occupied path and never aborts on first failure. It
 completes, then reports per-Repo Outcomes with failures retryable.
 
-The dialog asks about the org-level directory every time and remembers nothing — the
-Target is the user's hierarchy and we do not invent levels in it. The path list redraws
-live as the toggle changes.
+The clone screen (built on Glyph, `internal/glyphclone`) asks about the Target and the
+org-level directory every time; the Target is the user's hierarchy and we do not invent
+levels in it. The Target is chosen in a folder browser (directories only, dotdirs hidden,
+`..` always available). `/` opens a prompt to type a path to jump to (`~`, absolute, or
+relative to the current folder, prefilled with the current folder); `n` prompts for a new
+folder name inside the current one. Both are the same modal prompt and take effect on
+Enter; Esc cancels.
+
+A folder that does not exist yet is a valid Target: it is only marked "new folder, created
+when cloning" and is created by the clone itself (`git clone` parents are made as needed),
+so cancelling the screen never leaves an empty directory behind. Every Repo in the batch
+lands under the chosen folder. A path that is a file, or sits under one, is rejected in
+the prompt. The preview redraws live as the folder or the toggle changes.
 
 ```
-┌─ Clone 4 repos ─────────────────────────┐
-│ target: ~/src                           │   ← pre-filled from config, editable
-│ [ ] put clones under an acme/ dir       │   ← always starts unticked
-│                                         │
-│ + acme/tf-network  → ~/src/tf-network   │
-│ + acme/tf-vpc      → ~/src/tf-vpc       │
-│ = acme/tf-dns      already cloned, skip │
-│ ! acme/tf-modules  path in use by       │
-│                    globex/tf-modules    │
-│                                         │
-│ 2 to clone · 1 skipped · 1 conflict     │
-│ [enter] clone  [space] toggle  [esc]    │
-└─────────────────────────────────────────┘
+Clone 4 repos → ~/src
+╭─ Choose target folder ──╮╭─ Preview ────────────────────────╮
+│> ../                    ││2 to clone · 1 skipped · 1 conflict│
+│  work/                  ││                                  │
+│  oss/                   ││+ tf-network                      │
+│                         ││+ tf-vpc                          │
+│                         ││= tf-dns                          │
+│                         ││! tf-modules                      │
+╰─────────────────────────╯╰──────────────────────────────────╯
+org subdirectory: off · parallelism: 8
+enter open · ← up · / go to path · n new folder · tab org subdirectory · c clone · esc cancel
 ```
+
+Pressing `c` switches the same screen to a live log: a spinner, progress bar and one line
+per Repo as its clone starts and finishes (`→` cloning, `✓` cloned, `=` skipped, `!`
+conflict, `✗` failed). When it finishes the summary offers `r` to retry only the failures.
+The log shows per-Repo status lines, not raw `git clone` output.
+
+The clone screen is mounted inside the shell's own Glyph app as a full-screen overlay with
+its own modal key router; it hands back the chosen Target and whether a run happened. See
+ADR-0008 and docs/glyph-feasibility.md.
 
 Execution shells out to `git` (ADR-0003), bounded at 8 parallel by default. Protocol is
 per-Host config, `ssh` by default, seeded from `gh config get git_protocol` when the
@@ -200,7 +227,10 @@ internal/forge/
     fd_ghcli.go     v1 ships this one only
 internal/clone/     pre-flight Outcome check + parallel `git clone`
 internal/config/    hostnames, protocol, default Targets. No secrets — ADR-0004.
-internal/tui/       bubbletea model, two panes, filter, dialogs
+internal/ui/        Glyph shell: Org and Repo panes, facets, selection, options/host/help
+                    cards, key routing. state*.go is terminal-free and tested directly.
+internal/glyphclone/  the clone screen mounted in the shell: folder browser, preview,
+                    live clone log
 ```
 
 GitLab is deferred and may deserve its own model entirely; the port is shaped honestly on
@@ -261,7 +291,7 @@ hosts:
 
 ## Logging
 
-A Bubble Tea program owns stdout and stderr — they are the render surface, and a stray
+A full-screen Glyph program owns stdout and the terminal — they are the render surface, and a stray
 write corrupts the display. A file is therefore the *only* diagnostic channel, not a
 convenience. Logging to stderr is refused outright rather than merely discouraged.
 
