@@ -125,7 +125,7 @@ func TestPreviewFollowsTargetAndSubdirToggle(t *testing.T) {
 func TestStalePreviewIsDropped(t *testing.T) {
 	var queue []func()
 	s := &state{in: Request{Preview: func(_ context.Context, target string, _ []clone.Repo, _ bool) []clone.Result {
-		return []clone.Result{{Repo: clone.Repo{Name: filepath.Base(target)}}}
+		return []clone.Result{{Dest: filepath.Join(target, "m-"+filepath.Base(target))}}
 	}}}
 	s.spawn = func(f func()) { queue = append(queue, f) }
 	s.apply = func(f func()) { f() }
@@ -137,7 +137,7 @@ func TestStalePreviewIsDropped(t *testing.T) {
 	for _, f := range queue {
 		f()
 	}
-	if !strings.Contains(s.previewText, "second") || strings.Contains(s.previewText, "first") {
+	if !strings.Contains(s.previewText, "m-second") || strings.Contains(s.previewText, "m-first") {
 		t.Errorf("stale preview won:\n%s", s.previewText)
 	}
 }
@@ -222,5 +222,13 @@ func TestExpandHome(t *testing.T) {
 	}
 	if got := expandHome("/abs/~x"); got != "/abs/~x" {
 		t.Errorf("expandHome touched non-home path: %s", got)
+	}
+}
+
+func TestEmptyTargetStartsInCurrentDirectory(t *testing.T) {
+	h := newHarness(t, "", nil, nil)
+	wd, _ := os.Getwd()
+	if h.s.dir != wd {
+		t.Errorf("dir = %q, want cwd %q", h.s.dir, wd)
 	}
 }

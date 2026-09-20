@@ -105,7 +105,7 @@ type state struct {
 func newState(in Request, logw io.Writer, spawn, apply func(func()), refresh, quit func()) *state {
 	s := &state{
 		in:        in,
-		dir:       expandHome(in.Target),
+		dir:       resolveTarget(in.Target),
 		orgSubdir: in.OrgSubdir,
 		logw:      logw,
 		spawn:     spawn,
@@ -117,6 +117,26 @@ func newState(in Request, logw io.Writer, spawn, apply func(func()), refresh, qu
 	s.reload("")
 	s.requestPreview()
 	return s
+}
+
+// resolveTarget makes the starting directory absolute; an empty Target (zero-config)
+// starts in the current directory.
+func resolveTarget(target string) string {
+	p := expandHome(target)
+	if p == "" {
+		p = "."
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
+}
+
+func relTo(dir, dest string) string {
+	if rel, err := filepath.Rel(dir, dest); err == nil && !strings.HasPrefix(rel, "..") {
+		return rel
+	}
+	return shortenHome(dest)
 }
 
 func plural(n int, one, many string) string {
@@ -252,13 +272,15 @@ func (s *state) requestPreview() {
 			if gen != s.previewGen {
 				return
 			}
-			s.previewText = formatPreview(results)
+			s.previewText = formatPreview(dir, results)
 			s.refresh()
 		})
 	})
 }
 
-func formatPreview(results []clone.Result) string {
+// formatPreview lists each Repo's destination relative to dir, since the header
+// already shows dir.
+func formatPreview(dir string, results []clone.Result) string {
 	by := map[clone.Outcome][]clone.Result{}
 	for _, r := range results {
 		by[r.Outcome] = append(by[r.Outcome], r)
@@ -271,7 +293,7 @@ func formatPreview(results []clone.Result) string {
 		mark    string
 	}{{clone.OutcomeCloned, "+"}, {clone.OutcomeSkipped, "="}, {clone.OutcomeConflict, "!"}} {
 		for _, r := range by[o.outcome] {
-			fmt.Fprintf(&b, "\n%s %s\n    %s", o.mark, r.Repo.Name, shortenHome(r.Dest))
+			fmt.Fprintf(&b, "\n%s %s", o.mark, relTo(dir, r.Dest))
 		}
 	}
 	return b.String()
@@ -295,7 +317,7 @@ func (s *state) startRun(repos []clone.Repo) {
 	s.busy = true
 	s.total, s.finished, s.pct = len(repos), 0, 0
 	s.status = fmt.Sprintf("cloning 0/%d", s.total)
-	s.keys = "^c cancel"
+	s.keys = "esc/^c cancel"
 	dir, sub := s.dir, s.orgSubdir
 	s.spawn(func() {
 		results := s.in.Run(ctx, dir, repos, sub, s.in.Parallelism, s.onEvent)

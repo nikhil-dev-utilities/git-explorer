@@ -2,6 +2,7 @@ package glyphclone
 
 import (
 	"io"
+	"os"
 
 	. "github.com/kungfusheep/glyph"
 )
@@ -39,15 +40,37 @@ func runView(s *state, logr io.Reader) Component {
 // Launch runs the clone screen to completion and blocks until the user leaves it. It
 // takes over the terminal, so a bubbletea shell must release it first (tea.Exec).
 func Launch(in Request) (Response, error) {
+	// Glyph's App.Stop closes os.Stdin. Give it a private /dev/tty handle so the
+	// bubbletea shell's own stdin survives this screen and can resume afterwards.
+	// wake (a second handle, since Stop closes the first) unblocks Glyph's pending
+	// read on Stop; see wakeRead.
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return Response{}, err
+	}
+	defer tty.Close()
+	waker, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return Response{}, err
+	}
+	defer waker.Close()
+	orig := os.Stdin
+	os.Stdin = tty
+	defer func() { os.Stdin = orig }()
+
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	defer pw.Close()
 
 	app := NewApp()
-	s := newState(in, pw, func(f func()) { go f() }, app.Apply, app.RequestRender, app.Stop)
+	stop := func() {
+		app.Stop()
+		wakeRead(waker)
+	}
+	s := newState(in, pw, func(f func()) { go f() }, app.Apply, app.RequestRender, stop)
 	wire(app, s, pr)
 
-	err := app.Run()
+	err = app.Run()
 	return s.output(), err
 }
 
