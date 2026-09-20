@@ -36,17 +36,11 @@ func TestRenderButtons_IncludesEveryKeyAndLabel(t *testing.T) {
 
 // The each-dialog button-list functions are tested for content (right keys, right
 // labels, right one marked primary) — matched against update.go's real key handling
-// by the existing behavioral tests (TestLeavePrompt_*, TestCloneDialog_*,
-// TestHostSwitch_*, TestFatal_*), which exercise the actual keys, not this list.
+// by the existing behavioral tests (TestLeavePrompt_*, // TestHostSwitch_*, TestFatal_*), which exercise the actual keys, not this list.
 
 func TestLeavePromptButtons(t *testing.T) {
 	assertExactlyOnePrimary(t, leavePromptButtons(), "esc")
 	assertHasKeys(t, leavePromptButtons(), "c", "d", "esc")
-}
-
-func TestCloneDialogButtons(t *testing.T) {
-	assertExactlyOnePrimary(t, cloneDialogButtons(), "esc")
-	assertHasKeys(t, cloneDialogButtons(), "enter", "esc")
 }
 
 func TestHostSwitchButtons(t *testing.T) {

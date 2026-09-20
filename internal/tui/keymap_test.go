@@ -10,8 +10,8 @@ import (
 // ^h is backspace, ^i is Tab, ^m/^[ are Enter/Esc, ^a/^e/^u/^w/^k are readline
 // home/end/kill (expected to work inside the always-focused filter box), and ^z/^d
 // belong to the terminal. ^c is deliberately excluded from this forbidden set: it is
-// bound throughout this package, but only ever to quit (or cancel-then-quit in
-// CloneRun) — the same meaning it already has in virtually every terminal program,
+// bound throughout this package, but only ever to quit (or cancel in the clone
+// screen) — the same meaning it already has in virtually every terminal program,
 // not a new app-specific verb riding on a key someone would expect to interrupt the
 // process.
 //

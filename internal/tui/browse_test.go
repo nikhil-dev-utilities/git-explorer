@@ -32,7 +32,7 @@ func newTestModel(t *testing.T, f *fakeForge, hosts ...forge.Host) *teatest.Test
 	if len(hosts) == 0 {
 		hosts = []forge.Host{{Name: "github.com"}}
 	}
-	m := New(f, hosts, true, noopClonePreview, noopCloneRunner, "", 8)
+	m := New(f, hosts, true, noopCloneScreen, "", 8)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
 	t.Cleanup(func() {
 		_ = tm.Quit()
@@ -48,7 +48,7 @@ func newTestModelWithDiscoveredHosts(t *testing.T, f *fakeForge, hosts ...forge.
 	if len(hosts) == 0 {
 		hosts = []forge.Host{{Name: "github.com"}}
 	}
-	m := New(f, hosts, false, noopClonePreview, noopCloneRunner, "", 8)
+	m := New(f, hosts, false, noopCloneScreen, "", 8)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(80, 24))
 	t.Cleanup(func() {
 		_ = tm.Quit()

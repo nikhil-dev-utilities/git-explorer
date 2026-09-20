@@ -1,47 +1,60 @@
 package tui
 
 import (
-	"context"
+	"io"
+	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
+	"github.com/nikhil-dev-utilities/git-explorer/internal/glyphclone"
 )
 
-// ClonePreviewFunc classifies repos against target without cloning anything — a
-// batched wrapper around clone.Classify. Its real implementation (a thin loop
-// calling clone.Classify per Repo) is composition-root wiring, not part of this
-// package: internal/tui only needs the type and, in tests, a fake satisfying it. No
-// change to internal/clone itself was needed for this — it's a caller-side loop over
-// the existing clone.Classify.
-//
-// clone.Result.Err here can only ever mean "classification itself failed" (e.g. git
-// not installed) — never "the clone failed," since no clone is attempted by this
-// func.
-type ClonePreviewFunc func(ctx context.Context, target string, repos []clone.Repo, orgSubdir bool) []clone.Result
+// CloneScreenFunc hands the terminal to the Glyph clone screen and blocks until the
+// user leaves it. The Target picker, the pre-flight preview, and the Clone Run itself
+// all live inside it (internal/glyphclone), so this package neither previews nor runs
+// clones. It is injected so tests never take over a terminal.
+type CloneScreenFunc func(glyphclone.Request) (glyphclone.Response, error)
 
-// clonePreviewMsg carries the result of a ClonePreviewFunc call.
-type clonePreviewMsg struct {
-	results []clone.Result
+// cloneScreenDoneMsg is delivered when the clone screen returns and bubbletea has
+// taken the terminal back.
+type cloneScreenDoneMsg struct {
+	resp glyphclone.Response
+	err  error
 }
 
-// enterCloneDialog transitions to ModeCloneDialog and dispatches the pre-flight
-// classification for the current Selection. Both paths that can reach this mode —
-// Enter on a non-empty Selection, and LeavePrompt's "clone now" — go through this one
-// function, so neither can forget to actually compute the preview.
+// execFunc adapts a func to tea.ExecCommand. Glyph reads os.Stdin and writes the tty
+// itself, so the stdio setters are deliberately ignored.
+type execFunc func() error
+
+func (f execFunc) Run() error        { return f() }
+func (execFunc) SetStdin(io.Reader)  {}
+func (execFunc) SetStdout(io.Writer) {}
+func (execFunc) SetStderr(io.Writer) {}
+
+// enterCloneDialog suspends bubbletea and runs the clone screen for the current
+// Selection. Both paths that reach it — Enter on a non-empty Selection, and
+// LeavePrompt's "clone now" — go through here.
 func (m Model) enterCloneDialog() (Model, tea.Cmd) {
-	m.mode = ModeCloneDialog
-	m.clonePreviewResults = nil
-	return m, m.dispatchClonePreview()
+	req := m.cloneRequest()
+	screen := m.cloneScreen
+	var resp glyphclone.Response
+	cmd := tea.Exec(execFunc(func() (err error) {
+		resp, err = screen(req)
+		return err
+	}), func(err error) tea.Msg {
+		return cloneScreenDoneMsg{resp: resp, err: err}
+	})
+	m.mode = ModeBrowse
+	return m, cmd
 }
 
-func (m Model) dispatchClonePreview() tea.Cmd {
-	fn := m.clonePreview
-	target := m.cloneTarget
-	repos := m.selectedCloneRepos()
-	orgSubdir := m.cloneOrgSubdir
-	return func() tea.Msg {
-		return clonePreviewMsg{results: fn(backgroundCtx(), target, repos, orgSubdir)}
+func (m Model) cloneRequest() glyphclone.Request {
+	return glyphclone.Request{
+		Target:      m.cloneTarget,
+		OrgSubdir:   m.cloneOrgSubdir,
+		Repos:       m.selectedCloneRepos(),
+		Parallelism: m.cloneParallelism,
 	}
 }
 
@@ -63,45 +76,19 @@ func (m Model) selectedCloneRepos() []clone.Repo {
 	return out
 }
 
-func (m Model) handleClonePreview(msg clonePreviewMsg) (Model, tea.Cmd) {
-	m.clonePreviewResults = msg.results
+// handleCloneScreenDone remembers the Target and org-subdirectory choice for the
+// next Clone Run in this session (see ADR-0007: nothing persists across launches),
+// and clears the Selection only if a run actually happened — backing out of the
+// screen leaves it intact.
+func (m Model) handleCloneScreenDone(msg cloneScreenDoneMsg) (Model, tea.Cmd) {
+	if msg.err != nil {
+		slog.Error("clone screen failed", "error", msg.err)
+		return m, nil
+	}
+	m.cloneTarget = msg.resp.Target
+	m.cloneOrgSubdir = msg.resp.OrgSubdir
+	if msg.resp.Ran {
+		m.selected = nil
+	}
 	return m, nil
-}
-
-// toggleOrgSubdir flips the org-subdirectory toggle and recomputes the preview —
-// every listed path must update live, per the PRD. It starts off (TriHide-like
-// default) at launch, since New always constructs a Model with it false — but,
-// confirmed as deliberate rather than an oversight: neither this nor cloneTarget
-// (see editCloneTarget) resets between separate Clone Runs within one running
-// session. Whatever you last set either to is what the next batch starts from too,
-// on purpose — convenient for cloning several batches to the same non-default
-// location in one sitting. Only a fresh launch (a new Model via New) resets either
-// one. ADR-0007 is about not caching Org/Repo lists *across launches*; it doesn't
-// speak to this in-session persistence one way or the other.
-func (m Model) toggleOrgSubdir() (Model, tea.Cmd) {
-	m.cloneOrgSubdir = !m.cloneOrgSubdir
-	return m, m.dispatchClonePreview()
-}
-
-// leaveCloneDialog returns to Browse with focus on Repos and the Selection intact —
-// Esc from the dialog clones nothing.
-func (m Model) leaveCloneDialog() Model {
-	m.mode = ModeBrowse
-	return m
-}
-
-// editCloneTarget edits the clone target path and recomputes the preview against the
-// new value — every listed destination must update live, the same guarantee
-// toggleOrgSubdir already gives the org-subdirectory toggle, including that edit
-// sticking around for the next Clone Run too, on purpose — see toggleOrgSubdir's own
-// doc comment. DESIGN.md's clone dialog mockup marks this field "pre-filled from
-// config, editable"; before this it was fixed at whatever New was constructed with
-// for the whole session.
-//
-// Nothing else in ModeCloneDialog consumes plain typing (Tab already owns the
-// org-subdirectory toggle) — unlike Browse's always-focused filter (ADR-0006), there
-// is no competing meaning for a bare keystroke here.
-func (m Model) editCloneTarget(edit func(string) string) (Model, tea.Cmd) {
-	m.cloneTarget = edit(m.cloneTarget)
-	return m, m.dispatchClonePreview()
 }

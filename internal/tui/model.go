@@ -11,7 +11,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
@@ -26,12 +25,6 @@ const (
 	// ModeLeavePrompt guards a non-empty Selection (ADR-0005): entered instead of
 	// completing a navigation away from the Repo pane. clone now / discard / stay.
 	ModeLeavePrompt
-	// ModeCloneDialog previews the destination and pre-flight Outcome for every
-	// Repo in the current Selection.
-	ModeCloneDialog
-	// ModeCloneRun is modal (ADR-0005): exactly one run in flight at a time, pane
-	// navigation blocked until it finishes or is cancelled.
-	ModeCloneRun
 	// ModeHostSwitch lists every configured Host, letting the user pick a new
 	// active one without restarting the app.
 	ModeHostSwitch
@@ -168,22 +161,13 @@ type Model struct {
 	// whenever descend() starts a new Repo-pane session.
 	selected map[string]bool
 
-	// clonePreview classifies a Selection against cloneTarget without cloning
-	// anything — injected so this package's tests never touch the filesystem or
-	// git. clonePreviewResults holds the live result, recomputed whenever
-	// cloneOrgSubdir changes.
-	clonePreview        ClonePreviewFunc
-	cloneTarget         string
-	cloneOrgSubdir      bool // always starts false — never remembered, per ADR-0007
-	clonePreviewResults []clone.Result
-
-	// cloneRun executes a confirmed Clone Run. Per ADR-0005 exactly one is ever in
-	// flight; cloneRunCancel is non-nil only while cloneRunInFlight is true.
-	cloneRun         CloneRunnerFunc
+	// cloneScreen runs the Glyph clone screen (target picker, preview, Clone Run).
+	// cloneTarget and cloneOrgSubdir carry the last choice between Clone Runs within
+	// one session only — ADR-0007 is about not caching Org/Repo lists across launches.
+	cloneScreen      CloneScreenFunc
+	cloneTarget      string
+	cloneOrgSubdir   bool
 	cloneParallelism int
-	cloneRunInFlight bool
-	cloneRunCancel   context.CancelFunc
-	cloneRunResults  []clone.Result
 }
 
 func (m Model) selectionCount() int {
@@ -196,7 +180,7 @@ func (m Model) selectionCount() int {
 	return n
 }
 
-// New constructs a Model. f, preview, and runner are injected so this package's
+// New constructs a Model. f and screen are injected so this package's
 // tests never depend on a real Forge or touch the filesystem/git. hosts must be
 // non-empty; the first is active at launch. hostsUserConfigured is whether hosts
 // came from an explicit hosts: list the user wrote themselves, as opposed to
@@ -207,7 +191,7 @@ func (m Model) selectionCount() int {
 // it is never written back to anything, only ever read. parallelism bounds a Clone
 // Run (Config's clone.parallelism); values below 1 are clone.Run's own concern, not
 // this package's — it passes parallelism through unmodified.
-func New(f forge.Forge, hosts []forge.Host, hostsUserConfigured bool, preview ClonePreviewFunc, runner CloneRunnerFunc, target string, parallelism int) Model {
+func New(f forge.Forge, hosts []forge.Host, hostsUserConfigured bool, screen CloneScreenFunc, target string, parallelism int) Model {
 	if len(hosts) == 0 {
 		panic("tui.New: hosts must be non-empty")
 	}
@@ -216,9 +200,8 @@ func New(f forge.Forge, hosts []forge.Host, hostsUserConfigured bool, preview Cl
 		hosts:               hosts,
 		hostsUserConfigured: hostsUserConfigured,
 		mode:                ModeBrowse,
-		clonePreview:        preview,
+		cloneScreen:         screen,
 		cloneTarget:         target,
-		cloneRun:            runner,
 		cloneParallelism:    parallelism,
 		orgPaneWidthIdx:     defaultOrgPaneWidthIdx,
 	}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
+	"github.com/nikhil-dev-utilities/git-explorer/internal/glyphclone"
 )
 
 func TestHostKind(t *testing.T) {
@@ -36,12 +36,8 @@ func (fakeForge) ListOrgs(ctx context.Context, host forge.Host) (<-chan forge.Or
 func (fakeForge) ListRepos(ctx context.Context, org forge.Org) ([]forge.Repo, error) { return nil, nil }
 func (fakeForge) CloneURL(repo forge.Repo) string                                    { return "" }
 
-func noopPreview(ctx context.Context, target string, repos []clone.Repo, orgSubdir bool) []clone.Result {
-	return nil
-}
-
-func noopRunner(ctx context.Context, target string, repos []clone.Repo, orgSubdir bool, parallelism int) []clone.Result {
-	return nil
+func noopScreen(glyphclone.Request) (glyphclone.Response, error) {
+	return glyphclone.Response{}, nil
 }
 
 func TestBuildModel_HostsCarryInferredKind(t *testing.T) {
@@ -53,7 +49,7 @@ func TestBuildModel_HostsCarryInferredKind(t *testing.T) {
 		Clone: config.CloneConfig{Parallelism: 4},
 	}
 
-	model := buildModel(fakeForge{}, cfg, true, noopPreview, noopRunner)
+	model := buildModel(fakeForge{}, cfg, true, noopScreen)
 
 	// Model doesn't expose hosts directly; exercise it indirectly through the one
 	// observable surface buildModel's own callers care about — that New didn't
@@ -75,7 +71,7 @@ func TestBuildModel_EmptyHostsPanics(t *testing.T) {
 			t.Error("buildModel with zero Hosts did not panic, want it to (tui.New requires non-empty hosts)")
 		}
 	}()
-	buildModel(fakeForge{}, config.Config{}, true, noopPreview, noopRunner)
+	buildModel(fakeForge{}, config.Config{}, true, noopScreen)
 }
 
 func TestResolveConfigPath(t *testing.T) {

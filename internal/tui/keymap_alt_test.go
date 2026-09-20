@@ -59,25 +59,6 @@ func TestAltH_OpensHostSwitch_SameAsCtrlY(t *testing.T) {
 	}
 }
 
-func TestAltC_OpensCloneDialog_SameAsEnter(t *testing.T) {
-	f := &fakeForge{
-		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},
-		repos:    selectionRepoFixture(),
-	}
-	tm := newTestModel(t, f)
-	time.Sleep(settleDelay)
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter}) // descend
-	time.Sleep(settleDelay)
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab}) // tick "api"
-	tm.Send(altKeyMsg('c'))               // alias for Enter: open clone dialog
-	m := finalModelAfter(t, tm)
-
-	if m.mode != ModeCloneDialog {
-		t.Fatalf("mode = %v, want ModeCloneDialog after alt-c on a non-empty Selection", m.mode)
-	}
-}
-
 func TestFatalAltH_OpensHostSwitch_SameAsCtrlY(t *testing.T) {
 	hosts := []forge.Host{{Name: "github.com"}, {Name: "ghe.corp.internal"}}
 	f := &fakeForge{orgsErr: &forge.Error{Kind: forge.ErrKindFatal, Message: "not authenticated"}}

@@ -16,6 +16,7 @@ import (
 	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge/github"
+	"github.com/nikhil-dev-utilities/git-explorer/internal/glyphclone"
 )
 
 func main() {
@@ -72,8 +73,16 @@ func run() error {
 	slog.SetDefault(config.NewLogger(cfg.Log))
 
 	f := github.New()
-	model := buildModel(f, cfg, hostsUserConfigured, previewClones, clone.Run)
+	model := buildModel(f, cfg, hostsUserConfigured, cloneScreen)
 
 	_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
 	return err
+}
+
+// cloneScreen is the tui.CloneScreenFunc adapter: it injects the real pre-flight
+// classifier and the streaming Clone Run into the Glyph clone screen.
+func cloneScreen(req glyphclone.Request) (glyphclone.Response, error) {
+	req.Preview = previewClones
+	req.Run = clone.RunProgress
+	return glyphclone.Launch(req)
 }

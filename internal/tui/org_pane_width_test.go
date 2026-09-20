@@ -10,7 +10,7 @@ import (
 )
 
 func TestNew_DefaultsToTheLargerOrgPaneWidthPreset(t *testing.T) {
-	m := New(&fakeForge{}, []forge.Host{{Name: "github.com"}}, true, noopClonePreview, noopCloneRunner, "", 8)
+	m := New(&fakeForge{}, []forge.Host{{Name: "github.com"}}, true, noopCloneScreen, "", 8)
 	if m.orgPaneWidthIdx != defaultOrgPaneWidthIdx {
 		t.Fatalf("orgPaneWidthIdx = %d, want defaultOrgPaneWidthIdx (%d)", m.orgPaneWidthIdx, defaultOrgPaneWidthIdx)
 	}
@@ -20,7 +20,7 @@ func TestNew_DefaultsToTheLargerOrgPaneWidthPreset(t *testing.T) {
 }
 
 func TestCycleOrgPaneWidth_WrapsAroundThePresetList(t *testing.T) {
-	m := New(&fakeForge{}, []forge.Host{{Name: "github.com"}}, true, noopClonePreview, noopCloneRunner, "", 8)
+	m := New(&fakeForge{}, []forge.Host{{Name: "github.com"}}, true, noopCloneScreen, "", 8)
 	seen := map[int]bool{m.orgPaneWidthIdx: true}
 	for range len(orgPaneWidthPresets) {
 		m = m.cycleOrgPaneWidth()
@@ -56,7 +56,7 @@ func TestOrgPane_CtrlGWidensTheRenderedPane(t *testing.T) {
 // wide terminal doesn't crush the Repo pane if the terminal is then narrow (or was
 // already narrow) — see orgPaneWidth's own doc comment.
 func TestOrgPaneWidth_ClampsToLeaveTheRepoPaneUsable(t *testing.T) {
-	m := New(&fakeForge{}, []forge.Host{{Name: "github.com"}}, true, noopClonePreview, noopCloneRunner, "", 8)
+	m := New(&fakeForge{}, []forge.Host{{Name: "github.com"}}, true, noopCloneScreen, "", 8)
 	m.width = tooNarrowWidth // the narrowest width viewBrowse still renders two panes at
 	for m.orgPaneWidthIdx != len(orgPaneWidthPresets)-1 {
 		m = m.cycleOrgPaneWidth()

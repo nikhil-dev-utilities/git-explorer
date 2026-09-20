@@ -208,26 +208,3 @@ func TestLeavePrompt_Stay(t *testing.T) {
 		t.Errorf("selectionCount() = %d, want 1 — stay must not clear the Selection", m.selectionCount())
 	}
 }
-
-func TestLeavePrompt_CloneNowHandsOffSelectionAndMode(t *testing.T) {
-	f := &fakeForge{
-		orgPages: []forge.OrgPage{{Orgs: []forge.Org{{Name: "acme"}}}},
-		repos:    selectionRepoFixture(),
-	}
-	tm := newTestModel(t, f)
-	time.Sleep(settleDelay)
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
-	time.Sleep(settleDelay)
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
-	tm.Send(tea.KeyMsg{Runes: []rune{'c'}, Type: tea.KeyRunes})
-	m := finalModelAfter(t, tm)
-
-	if m.mode != ModeCloneDialog {
-		t.Fatalf("mode = %v, want ModeCloneDialog", m.mode)
-	}
-	if m.selectionCount() != 1 || !m.selected["api"] {
-		t.Errorf("selected = %+v, want api still ticked, handed off intact", m.selected)
-	}
-}

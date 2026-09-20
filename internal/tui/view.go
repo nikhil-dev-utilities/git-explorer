@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 )
 
 func (m Model) View() string {
@@ -16,10 +14,6 @@ func (m Model) View() string {
 		return m.viewBrowse()
 	case ModeLeavePrompt:
 		return m.viewLeavePrompt()
-	case ModeCloneDialog:
-		return m.viewCloneDialog()
-	case ModeCloneRun:
-		return m.viewCloneRun()
 	case ModeHostSwitch:
 		return m.viewHostSwitch()
 	case ModeFatal:
@@ -115,103 +109,6 @@ func hostSwitchButtons() []button {
 		{key: "esc", label: "cancel", primary: true},
 		{key: "^c", label: "quit"},
 	}
-}
-
-// viewCloneDialog shows the exact destination path for every selected Repo — sourced
-// from clonePreviewResults, which clone.TargetPath (via the injected
-// ClonePreviewFunc) computed, never a reimplementation of that logic here — plus its
-// pre-flight classification, updating live as the org-subdirectory toggle flips or
-// the target path itself is edited (see editCloneTarget). Grouped by Outcome rather
-// than Selection order — the three possible actions (clone, leave alone, refuse)
-// read as three lists rather than a column a reader has to scan repo-by-repo to
-// characterize.
-func (m Model) viewCloneDialog() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "clone %d repos\n", m.selectionCount())
-	fmt.Fprintf(&b, "target: %s (type to edit)\n", m.cloneTarget)
-	subdir := "off"
-	if m.cloneOrgSubdir {
-		subdir = "on"
-	}
-	fmt.Fprintf(&b, "[tab] org-subdirectory: %s · parallelism: %d\n\n", subdir, m.cloneParallelism)
-
-	if len(m.clonePreviewResults) == 0 {
-		b.WriteString("classifying...\n")
-		return b.String()
-	}
-
-	byOutcome := make(map[clone.Outcome][]clone.Result, 3)
-	for _, r := range m.clonePreviewResults {
-		byOutcome[r.Outcome] = append(byOutcome[r.Outcome], r)
-	}
-	fmt.Fprintf(&b, "%d cloned · %d skipped · %d conflict\n\n",
-		len(byOutcome[clone.OutcomeCloned]), len(byOutcome[clone.OutcomeSkipped]), len(byOutcome[clone.OutcomeConflict]))
-
-	for _, outcome := range []clone.Outcome{clone.OutcomeCloned, clone.OutcomeSkipped, clone.OutcomeConflict} {
-		results := byOutcome[outcome]
-		if len(results) == 0 {
-			continue
-		}
-		fmt.Fprintf(&b, "%s:\n", outcome)
-		for _, r := range results {
-			fmt.Fprintf(&b, "  %-30s %s\n", r.Repo.Name, r.Dest)
-		}
-		b.WriteString("\n")
-	}
-
-	b.WriteString(renderButtons(cloneDialogButtons()))
-	b.WriteString("\n")
-	return b.String()
-}
-
-// cloneDialogButtons: cancel is primary — cloning is the one-way action here (a
-// Clone Run can conflict-skip its way around existing paths, but it still writes
-// to disk), cancel is the reversible default.
-func cloneDialogButtons() []button {
-	return []button{
-		{key: "enter", label: "clone"},
-		{key: "esc", label: "cancel", primary: true},
-	}
-}
-
-// viewCloneRun shows an indeterminate in-flight state while the single tea.Cmd
-// wrapping CloneRunnerFunc is running (see clonerun.go's doc comment for why this
-// isn't per-Repo live progress), then the full breakdown — grouped by Outcome, with
-// failures called out individually — once cloneRunResultMsg arrives.
-func (m Model) viewCloneRun() string {
-	var b strings.Builder
-
-	if m.cloneRunInFlight {
-		b.WriteString("cloning...\n\n[^c] cancel\n")
-		return b.String()
-	}
-
-	var cloned, skipped, conflict, failed []clone.Result
-	for _, r := range m.cloneRunResults {
-		switch {
-		case r.Err != nil:
-			failed = append(failed, r)
-		case r.Outcome == clone.OutcomeSkipped:
-			skipped = append(skipped, r)
-		case r.Outcome == clone.OutcomeConflict:
-			conflict = append(conflict, r)
-		default:
-			cloned = append(cloned, r)
-		}
-	}
-
-	fmt.Fprintf(&b, "cloned: %d  skipped: %d  conflict: %d  failed: %d\n\n",
-		len(cloned), len(skipped), len(conflict), len(failed))
-
-	if len(failed) > 0 {
-		b.WriteString("failed:\n")
-		for _, r := range failed {
-			fmt.Fprintf(&b, "  %-30s %v\n", r.Repo.Name, r.Err)
-		}
-		b.WriteString("\n[r] retry failures")
-	}
-	b.WriteString("  [esc] done\n")
-	return b.String()
 }
 
 func (m Model) viewLeavePrompt() string {

@@ -57,8 +57,8 @@ git-explorer
 ```
 
 Start typing to filter Orgs, `Enter` to descend into one, `Tab` to tick Repos, `Enter`
-again to open the clone dialog, `Enter` once more to confirm — everything clones into
-the current directory by default. `F1` shows the full keybinding list at any time.
+again to open the clone screen, browse to the target folder, `c` to clone — everything
+clones into the current directory by default. `F1` shows the full keybinding list at any time.
 
 ### Configuration (optional)
 
@@ -104,12 +104,14 @@ this same table inside the app.
 | LeavePrompt | d |  | discard the Selection |
 | LeavePrompt | Esc |  | stay |
 | LeavePrompt | ^c |  | quit |
-| CloneDialog | type |  | edit the target path |
+| CloneDialog | ↑/↓, j/k |  | move in the folder browser |
+| CloneDialog | Enter |  | open the highlighted folder |
+| CloneDialog | ←, h, Backspace |  | go up a folder |
 | CloneDialog | Tab |  | toggle the org-subdirectory path |
-| CloneDialog | Enter |  | confirm and start the Clone Run |
+| CloneDialog | c |  | start the Clone Run |
 | CloneDialog | Esc |  | cancel, cloning nothing |
-| CloneDialog | ^c |  | quit |
-| CloneRun | ^c |  | cancel the run (while in flight) · quit (once done) |
+| CloneDialog | ^c |  | cancel, cloning nothing |
+| CloneRun | Esc, ^c |  | cancel the run (while in flight) |
 | CloneRun | r |  | retry failed Repos only |
 | CloneRun | Esc |  | done — back to Browse |
 | HostSwitch | ↑/↓, ^p/^n |  | move the cursor |
@@ -120,8 +122,8 @@ this same table inside the app.
 | Fatal | ^c |  | quit |
 
 `LeavePrompt` guards a non-empty Selection when you try to leave the Repo pane without
-cloning it; `CloneDialog` previews where each Repo will land before you confirm;
-`CloneRun` is the clone itself; `HostSwitch` lists every Host from your config;
+cloning it; `CloneDialog` is a folder browser that picks the Target and previews where each Repo
+will land; `CloneRun` streams the clone itself into a live log; `HostSwitch` lists every Host from your config;
 `Fatal` takes over the screen when something (usually `gh` auth) needs fixing before
 anything else can work.
 
