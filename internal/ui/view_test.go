@@ -1,13 +1,16 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/kungfusheep/glyph"
 	"github.com/kungfusheep/riffkey"
 
+	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
@@ -24,6 +27,9 @@ func mount(t *testing.T, f *fakeForge, userConfigured bool) *harness {
 		Hosts:               []forge.Host{{Name: "github.com"}, {Name: "ghe.corp"}},
 		HostsUserConfigured: userConfigured,
 		Parallelism:         4,
+		CloneTarget:         t.TempDir(),
+		Preview:             fakePreview,
+		Run:                 fakeRun,
 	}
 	sync := func(fn func()) { fn() }
 	s := newState(d, sync, sync, func() {})
@@ -399,5 +405,104 @@ func TestFatalOffersHostSwitchAndReturnsToFatalOnCancel(t *testing.T) {
 	h.press(riffkey.SpecialDown, riffkey.SpecialEnter)
 	if h.s.mode != modeBrowse || join(orgNames(h.s)) != "corp" || h.s.fatalErr != nil {
 		t.Errorf("switch away from the broken host: mode=%v orgs=%v fatal=%v", h.s.mode, orgNames(h.s), h.s.fatalErr)
+	}
+}
+
+func fakePreview(_ context.Context, target string, repos []clone.Repo, sub bool) []clone.Result {
+	out := make([]clone.Result, len(repos))
+	for i, r := range repos {
+		out[i] = clone.Result{Repo: r, Dest: clone.TargetPath(target, r, sub)}
+	}
+	return out
+}
+
+func fakeRun(_ context.Context, target string, repos []clone.Repo, sub bool, _ int, on func(clone.Event)) []clone.Result {
+	out := make([]clone.Result, len(repos))
+	for i, r := range repos {
+		res := clone.Result{Repo: r, Dest: clone.TargetPath(target, r, sub)}
+		on(clone.Event{Result: res})
+		on(clone.Event{Result: res, Done: true})
+		out[i] = res
+	}
+	return out
+}
+
+// pollFor re-renders until want appears (the Log widget consumes its pipe asynchronously).
+func (h *harness) pollFor(w, ht int, want string) string {
+	h.t.Helper()
+	var out string
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if out = h.render(w, ht); strings.Contains(out, want) {
+			return out
+		}
+	}
+	h.t.Fatalf("never saw %q:\n%s", want, out)
+	return out
+}
+
+func (h *harness) selectTwoAndOpenClone() {
+	h.render(120, 30)
+	h.press(riffkey.SpecialEnter) // acme
+	h.render(120, 30)
+	h.press(riffkey.SpecialTab, riffkey.SpecialTab)
+	h.press(riffkey.SpecialEnter) // clone
+}
+
+func TestCloneScreenRunsInTheSharedAppAndClearsTheSelection(t *testing.T) {
+	h := mount(t, defaultFake(), true)
+	h.selectTwoAndOpenClone()
+
+	out := h.render(120, 30)
+	if h.s.mode != modeClone || !strings.Contains(out, "Clone 2 repos") || !strings.Contains(out, "Choose target folder") ||
+		!strings.Contains(out, "tf-dns") || strings.Contains(out, "Repos: acme") {
+		t.Fatalf("clone screen not shown full-screen (mode %v):\n%s", h.s.mode, out)
+	}
+	h.typed("x") // no browse typing under the clone screen
+	if h.s.query[focusRepos] != "" {
+		t.Error("typing leaked to the repo filter under the clone screen")
+	}
+
+	h.typed("c")
+	out = h.pollFor(120, 30, "done: 2 cloned")
+	for _, want := range []string{"Clone log", "✓ tf-dns", "✓ tf-network", "esc done"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("run view missing %q:\n%s", want, out)
+		}
+	}
+
+	h.press(riffkey.SpecialEscape)
+	out = h.render(120, 30)
+	if h.s.mode != modeBrowse || h.s.selectionCount() != 0 || !strings.Contains(out, "0 selected") {
+		t.Errorf("after the run: mode=%v selected=%d\n%s", h.s.mode, h.s.selectionCount(), out)
+	}
+	h.typed("we") // browse keys are live again
+	if h.s.query[focusRepos] != "we" {
+		t.Errorf("filter typing did not resume: %q", h.s.query)
+	}
+}
+
+func TestBackingOutOfTheCloneScreenKeepsSelectionAndRemembersTarget(t *testing.T) {
+	h := mount(t, defaultFake(), true)
+	h.selectTwoAndOpenClone()
+	h.render(120, 30)
+
+	h.typed("/")
+	h.typed("elsewhere")
+	target := h.s.cloneTarget
+	h.press(riffkey.SpecialEnter) // jump to the typed (new) folder
+	h.press(riffkey.SpecialTab)   // org subdirectory on
+	h.press(riffkey.SpecialEscape)
+
+	if h.s.mode != modeBrowse || h.s.selectionCount() != 2 {
+		t.Fatalf("mode=%v selected=%d, want browse with the Selection intact", h.s.mode, h.s.selectionCount())
+	}
+	if !h.s.cloneOrgSubdir || !strings.HasSuffix(h.s.cloneTarget, "elsewhere") || h.s.cloneTarget == target {
+		t.Errorf("choices not remembered: target=%q sub=%v", h.s.cloneTarget, h.s.cloneOrgSubdir)
+	}
+
+	h.press(riffkey.SpecialEnter) // reopen: starts from what was chosen
+	out := h.render(120, 30)
+	if !strings.Contains(out, "org subdirectory: on") || !strings.Contains(out, "new folder, created when cloning") {
+		t.Errorf("reopened screen did not start from the remembered choices:\n%s", out)
 	}
 }

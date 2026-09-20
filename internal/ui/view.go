@@ -3,6 +3,8 @@ package ui
 import (
 	. "github.com/kungfusheep/glyph"
 	"github.com/kungfusheep/riffkey"
+
+	"github.com/nikhil-dev-utilities/git-explorer/internal/glyphclone"
 )
 
 var modalFill = RGB(0x1c, 0x1c, 0x1c)
@@ -97,13 +99,14 @@ func fatalView(s *state) Component {
 // rootView keeps the panes outside any conditional: Glyph wires a conditional
 // branch's key bindings through child scopes, which would sit ahead of the routing
 // override in wire. Full-screen states are overlays drawn over the panes instead.
-func rootView(s *state) Component {
+func rootView(s *state, clone *glyphclone.Embedded) Component {
 	return VBox.Grow(1)(
 		browseView(s),
 		If(&s.showOptions).Then(Overlay.Backdrop().Centered()(optionsCard(s))),
 		If(&s.showLeave).Then(Overlay.Backdrop().Centered()(leaveCard(s))),
 		If(&s.showHost).Then(Overlay.Backdrop().Centered()(hostCard(s))),
 		If(&s.showHelp).Then(Overlay.Backdrop().Centered()(helpCard(s))),
+		If(&s.showClone).Then(Overlay.At(0, 0)(VBox.Width(&s.screenW).Height(&s.screenH).Fill(modalFill)(clone.View()))),
 		If(&s.showFatal).Then(Overlay.Backdrop().Centered()(VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(fatalView(s)))),
 		If(&s.showTooNarrow).Then(Overlay.Backdrop().Centered()(VBox.Border(BorderRounded).Fill(modalFill).Padding(1).FitContent()(Text("terminal too narrow: widen to 60+ columns")))),
 	)
@@ -114,7 +117,12 @@ func rootView(s *state) Component {
 // re-registered here after SetView, focus-aware, which overrides them. Each modal mode
 // owns a router pushed on entry and popped on exit, so browse keys are inert under it.
 func wire(app *App, s *state) {
-	app.SetView(rootView(s))
+	scr := glyphclone.Embed(glyphclone.Hooks{
+		Spawn: s.spawn, Apply: s.apply, Refresh: s.refresh,
+		Push: app.PushRouter, Pop: app.PopRouter, Done: s.cloneDone,
+	})
+	s.openScreen = scr.Open
+	app.SetView(rootView(s, scr))
 	app.OnResize(func(w, h int) { s.resize(w, h) })
 
 	bind := func(r *riffkey.Router, pattern string, fn func()) {
@@ -185,6 +193,7 @@ func wire(app *App, s *state) {
 
 	modal := map[mode]*riffkey.Router{
 		modeOptions: options, modeLeave: leave, modeHost: hosts, modeHelp: help, modeFatal: fatal,
+		modeClone: scr.Router(),
 	}
 	s.onMode = func(prev, next mode) {
 		if prev != modeBrowse {

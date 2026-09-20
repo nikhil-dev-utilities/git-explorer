@@ -10,7 +10,9 @@ import (
 	glyph "github.com/kungfusheep/glyph"
 	"github.com/kungfusheep/riffkey"
 
+	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
+	"github.com/nikhil-dev-utilities/git-explorer/internal/glyphclone"
 )
 
 // footerRows are the rows under the panes: host line, status line, key hints.
@@ -42,6 +44,8 @@ type Deps struct {
 	HostsUserConfigured bool
 	CloneTarget         string
 	Parallelism         int
+	Preview             glyphclone.PreviewFunc
+	Run                 glyphclone.RunFunc
 }
 
 var (
@@ -88,6 +92,12 @@ type state struct {
 	fatalErr     error
 	transientErr error
 
+	// clone screen: target and org-subdirectory carry between runs within a session
+	// only (ADR-0007). openScreen is wired to the mounted glyphclone.Screen.
+	cloneTarget    string
+	cloneOrgSubdir bool
+	openScreen     func(glyphclone.Request)
+
 	menu       []menuRow
 	menuCursor int
 
@@ -109,6 +119,7 @@ type state struct {
 	// derived display state, refreshed by sync
 	orgBorder, repoBorder glyph.Color
 	orgW, paneH           int16
+	screenW, screenH      int16
 	orgTitle, repoTitle   string
 	orgChips, repoChips   string
 	orgMsg, repoMsg       string
@@ -140,6 +151,7 @@ func newState(d Deps, spawn, apply func(func()), refresh func()) *state {
 	s := &state{
 		d:           d,
 		hosts:       d.Hosts,
+		cloneTarget: d.CloneTarget,
 		orgWidthIdx: defaultOrgWidthIdx,
 		archived:    triHide,
 		fork:        triHide,
@@ -507,9 +519,42 @@ func (s *state) tickAllMatching() {
 	s.sync()
 }
 
+// selectedCloneRepos converts the Selection into clone.Repo values, resolving each
+// CloneURL once through the Forge (internal/clone never computes one itself).
+func (s *state) selectedCloneRepos() []clone.Repo {
+	var out []clone.Repo
+	for _, r := range s.repoAll {
+		if s.selected[r.Name] {
+			out = append(out, clone.Repo{Org: r.Org, Name: r.Name, CloneURL: s.d.Forge.CloneURL(r)})
+		}
+	}
+	return out
+}
+
 func (s *state) openClone() {
-	// wired to the clone screen in a later commit
+	if s.openScreen != nil {
+		s.openScreen(glyphclone.Request{
+			Target:      s.cloneTarget,
+			OrgSubdir:   s.cloneOrgSubdir,
+			Repos:       s.selectedCloneRepos(),
+			Parallelism: s.d.Parallelism,
+			Preview:     s.d.Preview,
+			Run:         s.d.Run,
+		})
+	}
 	s.setMode(modeClone)
+}
+
+// cloneDone is the clone screen returning. The Target and org-subdirectory choice are
+// remembered for the next run; the Selection is cleared only if a run actually
+// happened, so backing out leaves it intact.
+func (s *state) cloneDone(resp glyphclone.Response) {
+	s.cloneTarget, s.cloneOrgSubdir = resp.Target, resp.OrgSubdir
+	if resp.Ran {
+		s.selected = map[string]bool{}
+		s.rebuildRepos()
+	}
+	s.setMode(modeBrowse)
 }
 
 // ---- leave prompt ----------------------------------------------------------------
@@ -594,6 +639,7 @@ func (s *state) sync() {
 	}
 	s.orgW = s.lay.orgWidth
 	s.paneH = int16(max(s.height-footerRows, 3))
+	s.screenW, s.screenH = int16(s.width), int16(s.height)
 
 	s.showBrowse = s.mode != modeFatal && s.mode != modeClone && !s.lay.tooNarrow
 	s.showTooNarrow = s.lay.tooNarrow && s.mode != modeFatal && s.mode != modeClone

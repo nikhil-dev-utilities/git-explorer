@@ -131,21 +131,26 @@ type state struct {
 }
 
 func newState(in Request, logw io.Writer, spawn, apply func(func()), refresh, quit func()) *state {
-	s := &state{
-		in:        in,
-		dir:       resolveTarget(in.Target),
-		orgSubdir: in.OrgSubdir,
-		logw:      logw,
-		spawn:     spawn,
-		apply:     apply,
-		refresh:   refresh,
-		quit:      quit,
-		title:     fmt.Sprintf("Clone %d %s", len(in.Repos), plural(len(in.Repos), "repo", "repos")),
-		hint:      dialogHints,
-	}
+	s := &state{logw: logw, spawn: spawn, apply: apply, refresh: refresh, quit: quit}
+	s.reset(in)
+	return s
+}
+
+// reset (re)initialises the screen for a new Request. Glyph holds pointers into s, so
+// fields are reset in place rather than replacing the struct.
+func (s *state) reset(in Request) {
+	s.in = in
+	s.dir = resolveTarget(in.Target)
+	s.orgSubdir = in.OrgSubdir
+	s.title = fmt.Sprintf("Clone %d %s", len(in.Repos), plural(len(in.Repos), "repo", "repos"))
+	s.hint = dialogHints
+	s.phase, s.showRun, s.busy, s.cancel = phaseDialog, false, false, nil
+	s.results, s.total, s.finished, s.pct, s.status, s.keys, s.ran = nil, 0, 0, 0, "", "", false
+	s.prompting, s.prompt, s.promptLabel, s.notice = false, 0, "", ""
+	s.field = glyph.InputState{}
+	s.previewText = ""
 	s.reload("")
 	s.requestPreview()
-	return s
 }
 
 // resolveTarget makes the starting directory absolute; an empty Target (zero-config)
@@ -293,6 +298,16 @@ func (s *state) move(delta int) {
 	s.cursor = min(max(s.cursor+delta, 0), len(s.entries)-1)
 }
 
+func (s *state) jump(last bool) {
+	if !s.interactive() || len(s.entries) == 0 {
+		return
+	}
+	s.cursor = 0
+	if last {
+		s.cursor = len(s.entries) - 1
+	}
+}
+
 func (s *state) toggleOrgSubdir() {
 	if !s.interactive() {
 		return
@@ -362,6 +377,7 @@ func (s *state) startRun(repos []clone.Repo) {
 	s.keys = "esc/^c cancel"
 	dir, sub := s.dir, s.orgSubdir
 	s.spawn(func() {
+		fmt.Fprintf(s.logw, "── %s → %s ──\n", s.title, shortenHome(dir))
 		results := s.in.Run(ctx, dir, repos, sub, s.in.Parallelism, s.onEvent)
 		s.apply(func() { s.finish(results) })
 	})
