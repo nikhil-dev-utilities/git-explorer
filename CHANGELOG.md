@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.5.0...v0.6.0) (2026-09-20)
+
+
+### Features
+
+* **ui:** replace the Bubble Tea UI with a Glyph UI ([#101](https://github.com/nikhil-dev-utilities/git-explorer/issues/101)) ([a9598f3](https://github.com/nikhil-dev-utilities/git-explorer/commit/a9598f3bf8fb81267edd23372467c0f58676c54f))
+
 ## [0.5.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.4.1...v0.5.0) (2026-09-09)
 
 
