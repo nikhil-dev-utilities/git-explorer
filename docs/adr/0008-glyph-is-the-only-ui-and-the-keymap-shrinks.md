@@ -21,6 +21,9 @@ knowing before touching this code:
 
 ## The keymap
 
+> The bindings in this section were revised by [ADR-0009](./0009-modal-filter-and-on-demand-repo-loading.md)
+> (modal filter, bare-key verbs). The Glyph decision and the routing notes above still apply.
+
 The old keymap (`^t ^f ^v ^s ^g ^y ^r` plus `alt-` aliases for each) was judged
 non-intuitive. ADR-0006's core rule stands: the filter is always live, so no verb is a bare
 letter. What changes is how many verbs need a key at all: host, archived, forks,

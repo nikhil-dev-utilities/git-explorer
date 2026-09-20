@@ -26,3 +26,9 @@ refresh key, a cache-clear command, a staleness indicator, and the bug reports t
   (ADR-0001), so this is reversible without touching the TUI. What must not happen is a
   cache appearing without an explicit refresh affordance and a visible staleness
   indicator, because that is the version that produces wrong clones.
+
+## Update
+
+[ADR-0009](./0009-modal-filter-and-on-demand-repo-loading.md) adds an in-memory, per-session Repo
+cache with a refresh key and an on-screen age, which is the condition set above. Nothing is
+persisted; the no-disk-cache decision here stands.

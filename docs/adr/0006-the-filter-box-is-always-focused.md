@@ -1,8 +1,7 @@
 # The filter box is always focused, so every verb takes a modifier
 
-> **Update:** the concrete bindings below were replaced in [ADR-0008](./0008-glyph-is-the-only-ui-and-the-keymap-shrinks.md)
-> (one `^o` options menu, no alt aliases, `^a` now ticks all). The always-focused filter and the
-> list of keys that must not be bound (except `^a`) still stand.
+> **Superseded** by [ADR-0009](./0009-modal-filter-and-on-demand-repo-loading.md): the filter is now modal (`/`).
+> The list of keys that must not be bound still applies while a filter is being typed.
 
 Typing goes straight to the filter and the list narrows as you type, fzf-style, with no
 key needed to begin. The core loop of this tool is "filter, then select everything that

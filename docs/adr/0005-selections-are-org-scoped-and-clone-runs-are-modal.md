@@ -24,3 +24,9 @@ work in flight.
   separable: backgrounding Clone Runs while keeping Selections Org-scoped recovers most
   of the fluency and reintroduces none of the invisible-selection problem. That is the
   cheaper half to reverse, and the one to reverse first.
+
+## Update
+
+[ADR-0009](./0009-modal-filter-and-on-demand-repo-loading.md): the leave prompt now fires only when
+ticks would be discarded (opening a different Org, switching Host), not on every exit from the Repo
+pane.

@@ -24,7 +24,7 @@ Two fixed columns, always.
 │                        ││ > [x] tf-vpc                       3h ago  │
 ╰────────────────────────╯╰────────────────────────────────────────────╯
  host: ghe.corp.internal · 3 selected
- type filter · ↑↓ move · tab tick · ^a all · enter clone · esc back · ^o options · F1 help
+ / filter · space tick · a all · x clear · enter clone · tab orgs · r reload · o options · ? help
 ```
 
 Each pane is a Glyph `FilterList` (the fuzzy-finder component): a live filter row, an
@@ -37,33 +37,55 @@ Each pane is a Glyph `FilterList` (the fuzzy-finder component): a live filter ro
 - Filter syntax is fzf's: plain text fuzzy-matches; `'foo` exact, `^foo` starts with,
   `foo$` ends with, `!foo` not, a space is AND, `|` is OR. Regex is not supported.
 - Facets (Org affiliation; Repo archived / forks / visibility), sort, Org pane width,
-  Host and reload all live in one menu, `^o`, each row showing its current value.
-- Tick all matching is a first-class key: filter to `tf`, hit `^a`. That is most of the job.
+  Host, clear selection and reload live in one menu, `o`, each row showing its current value.
+- Tick all matching is a first-class key: `/tf`, Enter, `a`. That is most of the job.
+- The Repo title shows the age of the data (`loaded 4m ago`); see "Loading" below.
 - The layout is recomputed every frame from the terminal size, so panes reflow live when
   the window is resized; see "Narrow terminals".
 
 ### Interaction
 
-The filter box is **always focused** (ADR-0006, ADR-0008): typing narrows the focused pane
-with no key needed to begin. So verbs cannot be bare letters; they sit on the few keys
-below. Glyph's `FilterList` routes typing to one pane only, so the shell owns key routing
-and drives the focused pane's `FilterList` (`SetQuery`, `SelectNext`, ...) itself.
+Filtering is **modal** (ADR-0009): press `/` to type into the focused pane's filter; Enter
+keeps it and returns to the list, Esc clears it. Outside that mode every key is a verb, so
+`Space`, `a`, `x`, `r`, `o` and `?` are bare keys and Tab is free to switch panes. Glyph's
+`FilterList` routes typing to one pane only, so the shell owns key routing and drives the
+focused pane's `FilterList` (`SetQuery`, `SelectNext`, ...) itself; each modal state
+(including filtering) owns a key router pushed on entry and popped on exit.
 
 | Key | Action |
 |---|---|
-| *any printable* | edit the focused pane's filter |
-| `↑` `↓` / `^p` `^n`, `PgUp` `PgDn` | move the cursor |
-| `Enter` / `→` | Orgs: open the Org · Repos: clone the ticked Repos |
-| `Esc` / `←` | Repos: back to Orgs (prompts if the Selection is non-empty) · Orgs: clear filter |
-| `Tab` / `Shift-Tab` | tick the Repo and move down / up (fzf convention) |
-| `^a` | tick every Repo matching the filter |
-| `^o` | options menu: Host, Org affiliation/sort, Repo archived/forks/visibility/sort, Org pane width, reload |
-| `F1` | help |
-| `^c` | quit |
+| `/` | filter the focused pane (fzf syntax) |
+| `↑` `↓` `j` `k` `^p` `^n`, `PgUp` `PgDn` | move the cursor |
+| `Tab` / `Shift-Tab` | switch between the Org and Repo panes; never reloads |
+| `Enter` `→` `l` | Orgs: open the Org (already shown: just focus) |
+| `Enter` `c` | Repos: clone the ticked Repos |
+| `Esc` | clear the pane's filter; with none, Repos back to Orgs |
+| `←` `h` | Repos back to Orgs; ticks and filters are kept |
+| `Space` | tick the Repo and move down |
+| `a` | tick every Repo matching the filter; again to untick them |
+| `x` | clear the whole Selection, including ticks the filter hides |
+| `r` `F5` | reload the focused pane from the Forge |
+| `o` | options: Host, facets, sort, pane width, clear selection, reload |
+| `?` `F1` | help |
+| `^c` | quit (a bare `q` would quit mid-word) |
 
-Unavailable and must not be bound: `^h` (backspace), `^i` (Tab), `^m`/`^[` (Enter/Esc),
-`^e` `^u` `^w` `^k` (readline end/kill in the filter box), `^z` `^d` (terminal). `^a` is
-bound to tick-all (ADR-0008); `Home` still jumps to the start of the filter.
+While filtering, every printable key is text; `↑ ↓ ^p ^n PgUp PgDn` still move the list,
+Enter accepts, Esc clears, `^c` quits. The keys people edit text with (`^h ^i ^m ^[ ^a ^e
+^u ^w ^k ^z ^d`) must not be bound in this mode.
+
+### Loading
+
+Orgs load at startup, on host switch, and on reload; focusing the Org pane never loads.
+Repos load only when an Org is opened for the first time in a session, or on reload.
+Reopening the Org already shown only moves focus, keeping its filter and ticks. Repos are
+cached per Host and Org **in memory for the session** and served from there when an Org is
+reopened; nothing is written to disk. The title shows the age of the data and `r` / `F5`
+refetch, which is the refresh affordance and staleness indicator ADR-0007 requires of any
+cache. Ticks for Repos that vanished on reload are dropped.
+
+Opening a *different* Org, or switching Host, would discard ticked Repos, so with ticks
+present it first asks: clone them now, discard and continue, or stay (ADR-0005, ADR-0009).
+Moving focus between panes never prompts.
 
 ### Failure surfaces
 
@@ -71,13 +93,13 @@ Errors are scoped to their blast radius rather than funnelled through one widget
 
 - **Fatal** — full screen, with the exact command to fix it. Missing `git` or `gh`, or no
   `gh` auth for the active Host. Nothing else in the app works, so nothing else is shown.
-  Offers `^y` to pick another Host rather than only `^c` to quit. Reserved for a Host the
+  Offers `y` to pick another Host rather than only `^c` to quit. Reserved for a Host the
   user explicitly configured themselves failing auth — a real misconfiguration. When the
   active Host instead came from zero-config discovery (or its last-resort implicit
   `github.com` default), the identical "not authenticated" failure downgrades to
   pane-scoped instead: nothing was misconfigured, there was just nothing to discover yet.
 - **Pane-scoped** — inline in the affected pane, *keeping whatever already loaded*. A
-  progressive load that dies at page 15 keeps its 1,400 Orgs and offers reload in `^o`. Losing them
+  progressive load that dies at page 15 keeps its 1,400 Orgs and offers reload (`r`). Losing them
   to a network blip would be the worst possible response.
 - **Transient** — the status line. Rate limits with a retry countdown, and anything that
   resolves itself by waiting.
@@ -88,7 +110,7 @@ messages, never one blank pane.
 
 ### Narrow terminals
 
-The Org pane is 34 columns by default (`^o` cycles 28/34/42/52) and the Repo pane takes
+The Org pane is 34 columns by default (the `o` menu cycles 28/34/42/52) and the Repo pane takes
 the remainder. As width drops, the Repo row sheds the age column first, then state
 badges, keeping the name longest. The Org pane shrinks rather than crushing the Repo
 pane below 20 columns. Below 60 columns a "terminal too narrow" card replaces the
