@@ -17,8 +17,8 @@ User approved (plan: `/Users/nikhil/.claude/plans/lets-redo-the-orgs-happy-truff
 ## Plan / status
 
 1. [x] Step 0 spike (scratchpad): two FilterLists, routing override, SetQuery/Refresh, Stream
-2. [ ] `internal/browse` pure state
-3. [ ] `internal/ui` Glyph browse view + resize tests
+2. [x] pure state (merged into `internal/ui/state.go`, no separate `browse` pkg)
+3. [x] `internal/ui` Glyph browse view + resize tests
 4. [ ] Options menu + facets
 5. [ ] Leave prompt / Host switch / Help / Fatal overlays
 6. [ ] Embed clone screen (mountable), drop tea.Exec + tty hacks
@@ -35,3 +35,15 @@ User approved (plan: `/Users/nikhil/.claude/plans/lets-redo-the-orgs-happy-truff
   the "n/total" counter; layout reflows at 100/70/50 columns. No fallback to Filter+List needed.
 - Open: both panes show the `>` selection marker (Marker is static); focus must be conveyed
   by border colour, check dynamic border colour in step 3.
+- Glyph findings while building the browse view (v0.8.0):
+  - FilterLists must NOT sit inside an `If` branch: conditional branches wire bindings through
+    child scopes that sit ahead of our post-`SetView` routing override (typing went to the
+    wrong pane, and the Repo pane sized to content). Keep panes at the root; full-screen states
+    are `Overlay` cards over them.
+  - `selectionList.len` is only set during render, so `SelectNext/Prev` are no-ops until a
+    frame has been drawn. Headless tests must `Execute` a frame before cursor-moving keys.
+  - Panes need an explicit `Height(&paneH)` (rows minus footer) on the HBox and both panes,
+    otherwise a short terminal lets content overflow the footer and hides bottom borders.
+  - Rows: avoid `HBox.Gap` with `If` children (an empty branch still gets a gap, clipping the
+    last column by one); use explicit `SpaceW(1)`.
+  - `VBox.Title` is static: titles that change (repo pane) are a `Text(&title)` inside the box.
