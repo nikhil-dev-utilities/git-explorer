@@ -5,9 +5,8 @@ import (
 	"os"
 
 	. "github.com/kungfusheep/glyph"
+	"github.com/kungfusheep/riffkey"
 )
-
-const dialogHints = "enter open · ←/backspace up · tab org subdirectory · c clone · esc cancel"
 
 func dialogView(s *state) Component {
 	return VBox.Grow(1)(
@@ -22,8 +21,11 @@ func dialogView(s *state) Component {
 				TextView(&s.previewText).Grow(1),
 			),
 		),
-		Text(&s.options),
-		Text(dialogHints).Dim(),
+		If(&s.prompting).
+			Then(HBox.Gap(1)(Text(&s.promptLabel).Bold(), Input().Field(&s.field).Width(70))).
+			Else(Text(&s.options)),
+		Text(&s.notice).FG(Red),
+		Text(&s.hint).Dim(),
 	)
 }
 
@@ -78,6 +80,16 @@ func Launch(in Request) (Response, error) {
 // Glyph does not expose a named view's template, which would make it untestable
 // headlessly. Every handler is a no-op outside its own phase (see state).
 func wire(app *App, s *state, logr io.Reader) {
+	// NoCounts: otherwise riffkey swallows digits as vim count prefixes and a path
+	// like ~/src2026 cannot be typed.
+	prompt := riffkey.NewRouter().NoCounts()
+	prompt.Handle("<Enter>", func(riffkey.Match) { s.submitPrompt() })
+	prompt.Handle("<Esc>", func(riffkey.Match) { s.back() })
+	prompt.Handle("<C-c>", func(riffkey.Match) { s.back() })
+	prompt.TextInput(&s.field.Value, &s.field.Cursor)
+	s.enterPrompt = func() { app.PushRouter(prompt) }
+	s.leavePrompt = app.PopRouter
+
 	app.SetView(VBox.Grow(1)(If(&s.showRun).Then(runView(s, logr)).Else(dialogView(s)))).
 		Handle("<Enter>", s.open).
 		Handle("l", s.open).
@@ -85,6 +97,8 @@ func wire(app *App, s *state, logr io.Reader) {
 		Handle("h", s.up).
 		Handle("<Left>", s.up).
 		Handle("<BS>", s.up).
+		Handle("/", s.openGoto).
+		Handle("n", s.openNew).
 		Handle("<Tab>", s.toggleOrgSubdir).
 		Handle("c", s.confirm).
 		Handle("r", s.retry).

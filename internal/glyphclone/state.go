@@ -8,12 +8,16 @@ package glyphclone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	glyph "github.com/kungfusheep/glyph"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/clone"
 )
@@ -50,6 +54,18 @@ const (
 	phaseDialog phase = iota
 	phaseRunning
 	phaseDone
+)
+
+type promptKind int
+
+const (
+	promptGoto promptKind = iota + 1
+	promptNew
+)
+
+const (
+	dialogHints = "enter open · ← up · / go to path · n new folder · tab org subdirectory · c clone · esc cancel"
+	promptHints = "enter go · esc cancel"
 )
 
 type entry struct {
@@ -93,6 +109,14 @@ type state struct {
 	options    string
 	title      string
 
+	prompting   bool
+	prompt      promptKind
+	promptLabel string
+	field       glyph.InputState
+	notice      string
+	dirNote     string
+	hint        string
+
 	logw io.Writer
 
 	// seams: production wires these to Glyph; tests make them synchronous.
@@ -100,6 +124,10 @@ type state struct {
 	apply   func(func())
 	refresh func()
 	quit    func()
+
+	// set by wire: push/pop the prompt's key router so typed keys reach the field
+	enterPrompt func()
+	leavePrompt func()
 }
 
 func newState(in Request, logw io.Writer, spawn, apply func(func()), refresh, quit func()) *state {
@@ -113,6 +141,7 @@ func newState(in Request, logw io.Writer, spawn, apply func(func()), refresh, qu
 		refresh:   refresh,
 		quit:      quit,
 		title:     fmt.Sprintf("Clone %d %s", len(in.Repos), plural(len(in.Repos), "repo", "repos")),
+		hint:      dialogHints,
 	}
 	s.reload("")
 	s.requestPreview()
@@ -204,7 +233,17 @@ func (s *state) reload(cursorOn string) {
 		}
 	}
 	s.dirDisplay = shortenHome(s.dir)
+	s.dirNote = ""
+	if _, err := os.Stat(s.dir); errors.Is(err, fs.ErrNotExist) {
+		s.dirNote = "new folder, created when cloning"
+	}
 	s.updateOptions()
+}
+
+// interactive is true while the dialog accepts browsing keys: not running, not typing
+// into the prompt.
+func (s *state) interactive() bool {
+	return s.phase == phaseDialog && !s.prompting
 }
 
 func (s *state) updateOptions() {
@@ -213,11 +252,14 @@ func (s *state) updateOptions() {
 		sub = "on"
 	}
 	s.options = fmt.Sprintf("org subdirectory: %s · parallelism: %d", sub, s.in.Parallelism)
+	if s.dirNote != "" {
+		s.options += " · " + s.dirNote
+	}
 }
 
 // open descends into the highlighted directory, or climbs for "..".
 func (s *state) open() {
-	if s.phase != phaseDialog || len(s.entries) == 0 {
+	if !s.interactive() || len(s.entries) == 0 {
 		return
 	}
 	e := s.entries[s.cursor]
@@ -231,7 +273,7 @@ func (s *state) open() {
 }
 
 func (s *state) up() {
-	if s.phase != phaseDialog {
+	if !s.interactive() {
 		return
 	}
 	parent := filepath.Dir(s.dir)
@@ -245,14 +287,14 @@ func (s *state) up() {
 }
 
 func (s *state) move(delta int) {
-	if s.phase != phaseDialog || len(s.entries) == 0 {
+	if !s.interactive() || len(s.entries) == 0 {
 		return
 	}
 	s.cursor = min(max(s.cursor+delta, 0), len(s.entries)-1)
 }
 
 func (s *state) toggleOrgSubdir() {
-	if s.phase != phaseDialog {
+	if !s.interactive() {
 		return
 	}
 	s.orgSubdir = !s.orgSubdir
@@ -301,7 +343,7 @@ func formatPreview(dir string, results []clone.Result) string {
 
 // confirm starts a Clone Run for every Repo in the Request.
 func (s *state) confirm() {
-	if s.phase != phaseDialog {
+	if !s.interactive() {
 		return
 	}
 	s.ran = true
@@ -422,6 +464,10 @@ func (s *state) retry() {
 // back is Esc/^c: it backs out of the dialog, cancels a running clone (the run then
 // finishes normally and lands on the summary), or leaves the finished summary.
 func (s *state) back() {
+	if s.prompting {
+		s.closePrompt()
+		return
+	}
 	switch s.phase {
 	case phaseRunning:
 		if s.cancel != nil {
@@ -435,4 +481,79 @@ func (s *state) back() {
 
 func (s *state) output() Response {
 	return Response{Ran: s.ran, Target: s.dir, OrgSubdir: s.orgSubdir, Results: s.results}
+}
+
+func (s *state) openGoto() { s.openPrompt(promptGoto) }
+func (s *state) openNew()  { s.openPrompt(promptNew) }
+
+func (s *state) openPrompt(kind promptKind) {
+	if !s.interactive() {
+		return
+	}
+	s.prompt, s.prompting, s.notice = kind, true, ""
+	s.field.Value = ""
+	s.promptLabel = "New folder:"
+	if kind == promptGoto {
+		s.promptLabel = "Go to:"
+		s.field.Value = strings.TrimSuffix(shortenHome(s.dir), "/") + "/"
+	}
+	s.field.Cursor = len(s.field.Value)
+	s.hint = promptHints
+	if s.enterPrompt != nil {
+		s.enterPrompt()
+	}
+}
+
+func (s *state) closePrompt() {
+	s.prompting = false
+	s.hint = dialogHints
+	if s.leavePrompt != nil {
+		s.leavePrompt()
+	}
+}
+
+// submitPrompt jumps to the typed folder. A folder that does not exist yet is fine: it
+// is only created when the Clone Run writes into it. A bad entry keeps the prompt open
+// with the reason shown.
+func (s *state) submitPrompt() {
+	if !s.prompting {
+		return
+	}
+	path, err := s.resolvePrompt(strings.TrimSpace(s.field.Value))
+	if err != nil {
+		s.notice = err.Error()
+		return
+	}
+	s.closePrompt()
+	s.notice = ""
+	s.dir = path
+	s.reload("")
+	s.requestPreview()
+}
+
+func (s *state) resolvePrompt(text string) (string, error) {
+	if text == "" {
+		return "", errors.New("type a folder")
+	}
+	var path string
+	if s.prompt == promptNew {
+		if !filepath.IsLocal(text) {
+			return "", errors.New("use a relative name inside the current folder")
+		}
+		path = filepath.Join(s.dir, text)
+	} else {
+		path = expandHome(text)
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(s.dir, path)
+		}
+		path = filepath.Clean(path)
+	}
+	fi, err := os.Stat(path)
+	switch {
+	case err == nil && !fi.IsDir():
+		return "", fmt.Errorf("%s is a file", shortenHome(path))
+	case err != nil && !errors.Is(err, fs.ErrNotExist):
+		return "", fmt.Errorf("cannot use %s: %s", shortenHome(path), errors.Unwrap(err))
+	}
+	return path, nil
 }

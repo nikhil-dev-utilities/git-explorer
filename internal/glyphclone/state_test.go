@@ -232,3 +232,148 @@ func TestEmptyTargetStartsInCurrentDirectory(t *testing.T) {
 		t.Errorf("dir = %q, want cwd %q", h.s.dir, wd)
 	}
 }
+
+func typeInto(s *state, text string) {
+	s.field.Value, s.field.Cursor = text, len(text)
+}
+
+func TestGotoPromptPrefillsCurrentDirAndJumpsToTypedPaths(t *testing.T) {
+	root := tree(t)
+	h := newHarness(t, root, []clone.Repo{{Org: "acme", Name: "r"}}, nil)
+	s := h.s
+
+	s.openGoto()
+	if !s.prompting || !strings.HasSuffix(s.field.Value, "/") || s.field.Cursor != len(s.field.Value) {
+		t.Fatalf("prompt not open/prefilled: %+v", s.field)
+	}
+
+	typeInto(s, filepath.Join(root, "alpha", "inner")) // absolute
+	s.submitPrompt()
+	if s.prompting || s.dir != filepath.Join(root, "alpha", "inner") {
+		t.Fatalf("absolute jump failed: prompting=%v dir=%s", s.prompting, s.dir)
+	}
+	if last := h.target[len(h.target)-1]; last != s.dir {
+		t.Errorf("preview not recomputed for jump: %s", last)
+	}
+
+	s.openGoto()
+	typeInto(s, "../../beta") // relative to current dir
+	s.submitPrompt()
+	if s.dir != filepath.Join(root, "beta") {
+		t.Errorf("relative jump: dir = %s", s.dir)
+	}
+}
+
+func TestGotoExpandsHome(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home")
+	}
+	h := newHarness(t, t.TempDir(), nil, nil)
+	h.s.openGoto()
+	typeInto(h.s, "~")
+	h.s.submitPrompt()
+	if h.s.dir != home {
+		t.Errorf("dir = %s, want %s", h.s.dir, home)
+	}
+}
+
+func TestPromptRejectsFilesAndKeepsPromptOpen(t *testing.T) {
+	root := tree(t)
+	h := newHarness(t, root, nil, nil)
+	s := h.s
+
+	s.openGoto()
+	typeInto(s, filepath.Join(root, "file.txt"))
+	s.submitPrompt()
+	if !s.prompting || !strings.Contains(s.notice, "is a file") || s.dir != root {
+		t.Errorf("file accepted: prompting=%v notice=%q dir=%s", s.prompting, s.notice, s.dir)
+	}
+
+	typeInto(s, filepath.Join(root, "file.txt", "below")) // under a file
+	s.submitPrompt()
+	if !s.prompting || !strings.Contains(s.notice, "cannot use") || s.dir != root {
+		t.Errorf("path under a file accepted: prompting=%v notice=%q", s.prompting, s.notice)
+	}
+
+	typeInto(s, "  ")
+	s.submitPrompt()
+	if !s.prompting || s.notice == "" {
+		t.Errorf("empty entry accepted")
+	}
+
+	s.back() // Esc cancels the prompt, not the screen
+	if s.prompting || h.quit != 0 || s.dir != root {
+		t.Errorf("esc: prompting=%v quit=%d dir=%s", s.prompting, h.quit, s.dir)
+	}
+}
+
+func TestNewFolderIsVirtualUntilCloneAndBatchLandsUnderIt(t *testing.T) {
+	root := tree(t)
+	var calls [][]string
+	repos := []clone.Repo{{Org: "acme", Name: "a"}, {Org: "acme", Name: "b"}}
+	h := newHarness(t, root, repos, fakeRun(nil, &calls))
+	s := h.s
+
+	s.openNew()
+	typeInto(s, "clones/acme")
+	s.submitPrompt()
+
+	want := filepath.Join(root, "clones", "acme")
+	if s.dir != want {
+		t.Fatalf("dir = %s, want %s", s.dir, want)
+	}
+	if !strings.Contains(s.dirNote, "new folder") {
+		t.Errorf("dirNote = %q, want the new-folder marker", s.dirNote)
+	}
+	if _, err := os.Stat(want); !os.IsNotExist(err) {
+		t.Errorf("new folder was created before the clone ran: %v", err)
+	}
+	if got := strings.Join(labels(s), " "); got != "../" {
+		t.Errorf("entries = %q, want only ..", got)
+	}
+
+	s.confirm()
+	for _, r := range s.results {
+		if filepath.Dir(r.Dest) != want {
+			t.Errorf("%s cloned to %s, want under %s", r.Repo.Name, r.Dest, want)
+		}
+	}
+
+	// climbing back out of a real dir clears the marker
+	s2 := newHarness(t, root, nil, nil).s
+	s2.openNew()
+	typeInto(s2, "alpha") // exists: just navigates, not "new"
+	s2.submitPrompt()
+	if s2.dirNote != "" || s2.dir != filepath.Join(root, "alpha") {
+		t.Errorf("existing folder marked new: dir=%s note=%q", s2.dir, s2.dirNote)
+	}
+}
+
+func TestNewFolderRejectsEscapingNames(t *testing.T) {
+	h := newHarness(t, tree(t), nil, nil)
+	s := h.s
+	for _, bad := range []string{"../out", "/abs", ".."} {
+		s.openNew()
+		typeInto(s, bad)
+		s.submitPrompt()
+		if !s.prompting || s.notice == "" {
+			t.Errorf("%q accepted", bad)
+		}
+		s.back()
+	}
+}
+
+func TestBrowsingKeysAreInertWhilePrompting(t *testing.T) {
+	root := tree(t)
+	h := newHarness(t, root, []clone.Repo{{Org: "o", Name: "a"}}, fakeRun(nil, new([][]string)))
+	s := h.s
+	s.openGoto()
+	s.confirm()
+	s.move(1)
+	s.open()
+	s.toggleOrgSubdir()
+	if s.phase != phaseDialog || s.cursor != 0 || s.dir != root || s.orgSubdir {
+		t.Errorf("dialog acted while prompting: phase=%v cursor=%d dir=%s sub=%v", s.phase, s.cursor, s.dir, s.orgSubdir)
+	}
+}
