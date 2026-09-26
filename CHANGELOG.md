@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.6.0...v0.7.0) (2026-09-26)
+
+
+### Features
+
+* **clone:** add a shallow clone toggle to the clone dialog ([#103](https://github.com/nikhil-dev-utilities/git-explorer/issues/103)) ([81ce507](https://github.com/nikhil-dev-utilities/git-explorer/commit/81ce5073a7a84ec56b58e1c85971b8addacabf47))
+
 ## [0.6.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.5.0...v0.6.0) (2026-09-20)
 
 
