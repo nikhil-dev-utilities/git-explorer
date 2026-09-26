@@ -175,7 +175,9 @@ A folder that does not exist yet is a valid Target: it is only marked "new folde
 when cloning" and is created by the clone itself (`git clone` parents are made as needed),
 so cancelling the screen never leaves an empty directory behind. Every Repo in the batch
 lands under the chosen folder. A path that is a file, or sits under one, is rejected in
-the prompt. The preview redraws live as the folder or the toggle changes.
+the prompt. The preview redraws live as the folder or the org-subdirectory toggle changes.
+`s` makes the whole Clone Run shallow (`git clone --depth 1`); like the org-subdirectory
+toggle it starts off each launch and is remembered for the rest of the session.
 
 ```
 Clone 4 repos → ~/src
@@ -187,8 +189,8 @@ Clone 4 repos → ~/src
 │                         ││= tf-dns                          │
 │                         ││! tf-modules                      │
 ╰─────────────────────────╯╰──────────────────────────────────╯
-org subdirectory: off · parallelism: 8
-enter open · ← up · / go to path · n new folder · tab org subdirectory · c clone · esc cancel
+org subdirectory: off · shallow: off · parallelism: 8
+enter open · ← up · / go to path · n new folder · tab org subdirectory · s shallow · c clone · esc cancel
 ```
 
 Pressing `c` switches the same screen to a live log: a spinner, progress bar and one line
