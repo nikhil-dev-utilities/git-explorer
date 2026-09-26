@@ -192,6 +192,36 @@ func TestRunStreamsLogAndRetriesOnlyFailures(t *testing.T) {
 	}
 }
 
+func TestShallowToggleReachesEveryRunIncludingRetry(t *testing.T) {
+	var got [][]clone.Repo
+	run := func(_ context.Context, _ string, repos []clone.Repo, _ bool, _ int, _ func(clone.Event)) []clone.Result {
+		got = append(got, repos)
+		out := make([]clone.Result, len(repos))
+		for i, r := range repos {
+			out[i] = clone.Result{Repo: r, Err: errors.New("boom")}
+		}
+		return out
+	}
+	repos := []clone.Repo{{Org: "o", Name: "a"}}
+	h := newHarness(t, t.TempDir(), repos, run)
+
+	h.s.toggleShallow()
+	if !strings.Contains(h.s.options, "shallow: on") {
+		t.Errorf("options = %q", h.s.options)
+	}
+	h.s.confirm()
+	h.s.retry()
+	if len(got) != 2 || !got[0][0].Shallow || !got[1][0].Shallow {
+		t.Errorf("runs = %+v, want both shallow", got)
+	}
+	if repos[0].Shallow {
+		t.Error("confirm mutated the Request's Repos")
+	}
+	if !h.s.output().Shallow {
+		t.Error("Response.Shallow not set")
+	}
+}
+
 func TestBackBehaviourPerPhase(t *testing.T) {
 	h := newHarness(t, t.TempDir(), nil, nil)
 	h.s.back()
