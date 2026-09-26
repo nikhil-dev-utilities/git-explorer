@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -89,5 +90,29 @@ func TestCloneOne_GitNotInstalled(t *testing.T) {
 	}
 	if !errors.Is(err, ErrGitNotInstalled) {
 		t.Errorf("error = %v, want it to wrap ErrGitNotInstalled", err)
+	}
+}
+
+func TestCloneOne_ShallowFetchesOnlyTheTipCommit(t *testing.T) {
+	work := t.TempDir()
+	mustRunGit(t, "init", "-q", work)
+	for _, msg := range []string{"one", "two"} {
+		mustRunGit(t, "-C", work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", msg)
+	}
+	bare := filepath.Join(t.TempDir(), "repo.git")
+	mustRunGit(t, "clone", "-q", "--bare", work, bare)
+
+	// --depth is ignored for plain local paths; file:// makes git honour it.
+	repo := Repo{Org: "acme", Name: "api", CloneURL: "file://" + bare, Shallow: true}
+	_, dest, err := CloneOne(context.Background(), t.TempDir(), repo, false)
+	if err != nil {
+		t.Fatalf("CloneOne() error = %v", err)
+	}
+	res, err := runGit(context.Background(), "-C", dest, "rev-list", "--count", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(res.Stdout)); got != "1" {
+		t.Errorf("shallow clone has %s commits, want 1", got)
 	}
 }

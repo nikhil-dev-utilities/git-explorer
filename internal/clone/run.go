@@ -109,7 +109,7 @@ dispatch:
 			defer wg.Done()
 			defer func() { <-sem }()
 			onEvent(Event{Result: Result{Repo: j.repo, Dest: j.dest}})
-			results[j.index].Err = performClone(ctx, j.repo.CloneURL, j.dest)
+			results[j.index].Err = performClone(ctx, j.repo, j.dest)
 			logRepoOutcome(ctx, results[j.index])
 			onEvent(Event{Result: results[j.index], Done: true})
 		}(j)
