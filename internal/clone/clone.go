@@ -22,6 +22,9 @@ type Repo struct {
 	Org      string
 	Name     string
 	CloneURL string
+	// Shallow clones with --depth 1. It is a per-Run choice stamped onto each Repo, so a
+	// retry of failed Repos (Result.Repo) keeps it.
+	Shallow bool
 }
 
 // Outcome is what happens to a Repo when it's classified against a Target.
@@ -110,7 +113,7 @@ func CloneOne(ctx context.Context, target string, repo Repo, orgSubdir bool) (Ou
 	if outcome != OutcomeCloned {
 		return outcome, dest, nil
 	}
-	if err := performClone(ctx, repo.CloneURL, dest); err != nil {
+	if err := performClone(ctx, repo, dest); err != nil {
 		return outcome, dest, err
 	}
 	return outcome, dest, nil
@@ -118,7 +121,7 @@ func CloneOne(ctx context.Context, target string, repo Repo, orgSubdir bool) (Ou
 
 // performClone is the actual `git clone` step, shared by CloneOne and Run so the two
 // never duplicate — or drift apart on — how a clone is actually executed.
-func performClone(ctx context.Context, cloneURL, dest string) error {
+func performClone(ctx context.Context, repo Repo, dest string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return fmt.Errorf("creating parent directory for %s: %w", dest, err)
 	}
@@ -126,7 +129,11 @@ func performClone(ctx context.Context, cloneURL, dest string) error {
 	atomic.AddInt64(&activeClones, 1)
 	defer atomic.AddInt64(&activeClones, -1)
 
-	if _, err := runGit(ctx, "clone", "--origin", "origin", cloneURL, dest); err != nil {
+	args := []string{"clone", "--origin", "origin"}
+	if repo.Shallow {
+		args = append(args, "--depth", "1")
+	}
+	if _, err := runGit(ctx, append(args, repo.CloneURL, dest)...); err != nil {
 		return err
 	}
 	return nil

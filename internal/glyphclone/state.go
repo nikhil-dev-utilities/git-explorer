@@ -32,6 +32,7 @@ type RunFunc func(ctx context.Context, target string, repos []clone.Repo, orgSub
 type Request struct {
 	Target      string
 	OrgSubdir   bool
+	Shallow     bool
 	Repos       []clone.Repo
 	Parallelism int
 	Preview     PreviewFunc
@@ -44,6 +45,7 @@ type Response struct {
 	Ran       bool
 	Target    string
 	OrgSubdir bool
+	Shallow   bool
 	Results   []clone.Result
 }
 
@@ -63,7 +65,7 @@ const (
 )
 
 const (
-	dialogHints = "enter open · ← up · / go to path · n new folder · tab org subdirectory · c clone · esc cancel"
+	dialogHints = "enter open · ← up · / go to path · n new folder · tab org subdirectory · s shallow · c clone · esc cancel"
 	promptHints = "enter go · esc cancel"
 )
 
@@ -89,6 +91,7 @@ type state struct {
 	entries   []entry
 	cursor    int
 	orgSubdir bool
+	shallow   bool
 
 	previewGen  int
 	previewText string
@@ -141,6 +144,7 @@ func (s *state) reset(in Request) {
 	s.in = in
 	s.dir = resolveTarget(in.Target)
 	s.orgSubdir = in.OrgSubdir
+	s.shallow = in.Shallow
 	s.title = fmt.Sprintf("Clone %d %s", len(in.Repos), plural(len(in.Repos), "repo", "repos"))
 	s.hint = dialogHints
 	s.phase, s.showRun, s.busy, s.cancel = phaseDialog, false, false, nil
@@ -251,14 +255,17 @@ func (s *state) interactive() bool {
 }
 
 func (s *state) updateOptions() {
-	sub := "off"
-	if s.orgSubdir {
-		sub = "on"
-	}
-	s.options = fmt.Sprintf("org subdirectory: %s · parallelism: %d", sub, s.in.Parallelism)
+	s.options = fmt.Sprintf("org subdirectory: %s · shallow: %s · parallelism: %d", onOff(s.orgSubdir), onOff(s.shallow), s.in.Parallelism)
 	if s.dirNote != "" {
 		s.options += " · " + s.dirNote
 	}
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
 
 // open descends into the highlighted directory, or climbs for "..".
@@ -316,6 +323,16 @@ func (s *state) toggleOrgSubdir() {
 	s.requestPreview()
 }
 
+// toggleShallow needs no new preview: depth changes how a Repo is cloned, not where or
+// whether.
+func (s *state) toggleShallow() {
+	if !s.interactive() {
+		return
+	}
+	s.shallow = !s.shallow
+	s.updateOptions()
+}
+
 // requestPreview recomputes the pre-flight preview off the render goroutine. Stale
 // answers (the user kept navigating) are dropped by generation.
 func (s *state) requestPreview() {
@@ -362,7 +379,12 @@ func (s *state) confirm() {
 	}
 	s.ran = true
 	s.results = nil
-	s.startRun(s.in.Repos)
+	repos := make([]clone.Repo, len(s.in.Repos))
+	for i, r := range s.in.Repos {
+		r.Shallow = s.shallow
+		repos[i] = r
+	}
+	s.startRun(repos)
 }
 
 func (s *state) startRun(repos []clone.Repo) {
@@ -495,7 +517,7 @@ func (s *state) back() {
 }
 
 func (s *state) output() Response {
-	return Response{Ran: s.ran, Target: s.dir, OrgSubdir: s.orgSubdir, Results: s.results}
+	return Response{Ran: s.ran, Target: s.dir, OrgSubdir: s.orgSubdir, Shallow: s.shallow, Results: s.results}
 }
 
 func (s *state) openGoto() { s.openPrompt(promptGoto) }

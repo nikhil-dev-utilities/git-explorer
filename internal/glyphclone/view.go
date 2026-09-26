@@ -57,6 +57,7 @@ func bindKeys(s *state, bind func(pattern string, fn func())) {
 	bind("/", s.openGoto)
 	bind("n", s.openNew)
 	bind("<Tab>", s.toggleOrgSubdir)
+	bind("s", s.toggleShallow)
 	bind("c", s.confirm)
 	bind("r", s.retry)
 	bind("<Esc>", s.back)

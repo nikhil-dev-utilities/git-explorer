@@ -106,6 +106,7 @@ type state struct {
 	// only (ADR-0007). openScreen is wired to the mounted glyphclone.Screen.
 	cloneTarget    string
 	cloneOrgSubdir bool
+	cloneShallow   bool
 	openScreen     func(glyphclone.Request)
 
 	menu       []menuRow
@@ -668,6 +669,7 @@ func (s *state) openClone() {
 		s.openScreen(glyphclone.Request{
 			Target:      s.cloneTarget,
 			OrgSubdir:   s.cloneOrgSubdir,
+			Shallow:     s.cloneShallow,
 			Repos:       s.selectedCloneRepos(),
 			Parallelism: s.d.Parallelism,
 			Preview:     s.d.Preview,
@@ -677,11 +679,11 @@ func (s *state) openClone() {
 	s.setMode(modeClone)
 }
 
-// cloneDone is the clone screen returning. The Target and org-subdirectory choice are
+// cloneDone is the clone screen returning. The Target, org-subdirectory and shallow choices are
 // remembered for the next run; the Selection is cleared only if a run actually
 // happened, so backing out leaves it intact.
 func (s *state) cloneDone(resp glyphclone.Response) {
-	s.cloneTarget, s.cloneOrgSubdir = resp.Target, resp.OrgSubdir
+	s.cloneTarget, s.cloneOrgSubdir, s.cloneShallow = resp.Target, resp.OrgSubdir, resp.Shallow
 	if resp.Ran {
 		s.selected = map[string]bool{}
 		s.rebuildRepos()

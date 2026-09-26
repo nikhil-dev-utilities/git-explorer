@@ -119,6 +119,7 @@ the data is (`loaded 4m ago`).
 | CloneDialog | / | type a path to jump to (~, absolute or relative); Enter go · Esc cancel |
 | CloneDialog | n | new folder in this one, made when cloning; Enter create · Esc cancel |
 | CloneDialog | Tab | toggle the org-subdirectory path |
+| CloneDialog | s | toggle shallow clones (--depth 1) |
 | CloneDialog | c | start the Clone Run |
 | CloneDialog | Esc, ^c | cancel, cloning nothing |
 | CloneRun | Esc, ^c | cancel the run (while in flight) |
