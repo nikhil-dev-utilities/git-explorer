@@ -16,7 +16,11 @@ then `git credential fill`. User: "file amendments, then issues, then present pl
        Add a pointer in ADR-0004 and Workspace mapping in CONTEXT.md. Commit.
 2. [x] File GitHub issues: forge routing, gh prereq only for GitHub Hosts, Bitbucket Cloud
        adapter, credentials, docs; Data Center deferred (needs-triage).
-3. [ ] Present execution plan (issue order, branches, PRs).
+3. [x] Present execution plan (issue order, branches, PRs).
+4. [x] Docs PR #111 opened (not merged).
+5. [x] #105 on `feat/forge-routing`, stacked on `docs/bitbucket-adrs`.
+6. [ ] #106 gh prereq, #107 credentials.
+7. [ ] #108 Cloud adapter, #109 docs, release.
 
 ## Notes
 - ADRs committed on branch `docs/bitbucket-adrs` (not pushed): ADR-0010, ADR-0011, ADR-0004 amended note, CONTEXT.md.
