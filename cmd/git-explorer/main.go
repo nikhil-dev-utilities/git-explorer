@@ -1,5 +1,5 @@
-// Command git-explorer is the composition root: it wires the real gh-cli Forge
-// adapter, resolved Config, and clone.Classify/clone.RunProgress into internal/ui and
+// Command git-explorer is the composition root: it wires the Forge adapters (behind a
+// forgeRouter), resolved Config, and clone.Classify/clone.RunProgress into internal/ui and
 // runs the Glyph app. See DESIGN.md and CONTEXT.md for the vocabulary and
 // design this wiring implements.
 package main
@@ -69,5 +69,6 @@ func run() error {
 
 	slog.SetDefault(config.NewLogger(cfg.Log))
 
-	return ui.Run(buildDeps(github.New(), cfg, hostsUserConfigured))
+	router := forgeRouter{"github": github.New()}
+	return ui.Run(buildDeps(router, cfg, hostsUserConfigured))
 }
