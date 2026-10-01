@@ -1,5 +1,8 @@
 # git-explorer never stores credentials
 
+> **Amended** by [ADR-0011](./0011-bitbucket-credentials-from-env-or-git-credential-store.md): Bitbucket
+> credentials may also come from git's credential store (`git credential fill`).
+
 The config file holds only non-secret facts — hostnames, Frontdoor choice, clone
 protocol, default Target paths. It is safe to commit to a dotfiles repo and safe to paste
 into a bug report. Credentials are never read from it, written to it, or cached anywhere
