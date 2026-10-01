@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.7.0...v0.8.0) (2026-10-01)
+
+
+### Features
+
+* **bitbucket:** add a Bitbucket Cloud Forge adapter ([#117](https://github.com/nikhil-dev-utilities/git-explorer/issues/117)) ([1178f41](https://github.com/nikhil-dev-utilities/git-explorer/commit/1178f416d34009109b4a5f991c125c8bf33a2592))
+* **bitbucket:** resolve credentials from env, then git credential fill ([#116](https://github.com/nikhil-dev-utilities/git-explorer/issues/116)) ([51249fb](https://github.com/nikhil-dev-utilities/git-explorer/commit/51249fb5c79eb9c8e2bfdc3ea13ed7d30817695a))
+* **forge:** route each Host to its Forge adapter ([#113](https://github.com/nikhil-dev-utilities/git-explorer/issues/113)) ([5b99235](https://github.com/nikhil-dev-utilities/git-explorer/commit/5b9923554322745b799dc0ba9e052b8f5c64fc69))
+* **prereq:** require gh only when a GitHub Host is configured ([#115](https://github.com/nikhil-dev-utilities/git-explorer/issues/115)) ([8b31f65](https://github.com/nikhil-dev-utilities/git-explorer/commit/8b31f65badf407bb5adce06e997c201e105f00f9))
+
 ## [0.7.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.6.0...v0.7.0) (2026-09-26)
 
 
