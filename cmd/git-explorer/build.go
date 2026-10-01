@@ -19,6 +19,7 @@ func buildDeps(f forge.Forge, cfg config.Config, hostsUserConfigured bool) ui.De
 	for i, h := range cfg.Hosts {
 		hosts[i] = forge.Host{
 			Name:     h.Name,
+			Forge:    h.Forge,
 			Kind:     hostKind(h.Name),
 			Protocol: h.Protocol,
 		}
@@ -47,7 +48,7 @@ func buildDeps(f forge.Forge, cfg config.Config, hostsUserConfigured bool) ui.De
 // its own — DESIGN.md's config examples never included one, so the divergent
 // Org-discovery behavior ADR-0002 requires is derived here, not configured by the user.
 func hostKind(name string) forge.HostKind {
-	if name == "github.com" {
+	if name == "github.com" || name == "bitbucket.org" {
 		return forge.HostPublic
 	}
 	return forge.HostPrivate
