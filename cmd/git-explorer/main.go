@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge/github"
@@ -30,10 +31,10 @@ func run() error {
 	flag.Parse()
 
 	// Checked before anything else is constructed: there is nothing useful the TUI
-	// can show if git or gh don't exist, and this is the one startup path allowed to
+	// can show if git doesn't exist, and this is the one startup path allowed to
 	// print directly rather than go through the log file — no render surface exists
-	// yet to corrupt.
-	if err := checkPrerequisites(); err != nil {
+	// yet to corrupt. gh is checked below, once the Hosts say whether it is needed.
+	if err := checkGit(exec.LookPath); err != nil {
 		return err
 	}
 
@@ -65,6 +66,10 @@ func run() error {
 		if discovered := github.DiscoverAuthenticatedHosts(env.Getenv); len(discovered) > 0 {
 			cfg.Hosts = discoveredConfigHosts(discovered, cfg.Clone.DefaultTarget)
 		}
+	}
+
+	if err := checkGh(cfg.Hosts, exec.LookPath); err != nil {
+		return err
 	}
 
 	slog.SetDefault(config.NewLogger(cfg.Log))
