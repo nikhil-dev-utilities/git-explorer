@@ -1,7 +1,7 @@
 # 009 - Bitbucket support (HTTPS clone + REST API)
 
-- status: in_progress
-- last updated: 2026-10-01 (all code merged)
+- status: completed
+- last updated: 2026-10-01 (released v0.8.0)
 
 ## Request
 
@@ -21,7 +21,8 @@ then `git credential fill`. User: "file amendments, then issues, then present pl
 5. [x] #105 on `feat/forge-routing`, stacked on `docs/bitbucket-adrs`.
 6. [x] #106 gh prereq (PR #115), #107 credentials (PR #116).
 7. [x] #108 Cloud adapter (PR #117), #109 docs (PR #118). All merged.
-8. [ ] Manual check against a real bitbucket.org account (user), then merge release PR #114 (0.8.0).
+8. [x] README Hosts section (PR #119). Release PR #114 merged on user request, v0.8.0 published.
+   Manual check against a real bitbucket.org account was NOT done before release.
 
 ## Notes
 - ADRs committed on branch `docs/bitbucket-adrs` (not pushed): ADR-0010, ADR-0011, ADR-0004 amended note, CONTEXT.md.
@@ -33,3 +34,4 @@ then `git credential fill`. User: "file amendments, then issues, then present pl
 - Atlassian removed `GET /2.0/user/permissions/workspaces` (CHANGE-2770). The adapter uses
   `GET /2.0/user/workspaces` instead: only an `administrator` flag, so Affiliation is Owner or Member.
 - CloneURL is built by hand. `links.clone` https embeds the API user (an email), which is the wrong git username.
+- Release: https://github.com/nikhil-dev-utilities/git-explorer/releases/tag/v0.8.0 (4 tarballs + checksums.txt).
