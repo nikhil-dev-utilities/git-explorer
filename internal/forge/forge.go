@@ -23,7 +23,10 @@ const (
 type Host struct {
 	// Name is the Host's address, e.g. "github.com" or "ghe.corp.internal".
 	Name string
-	Kind HostKind
+	// Forge names which Forge adapter serves this Host: "github" or "bitbucket". The
+	// composition root routes every call on it — see ADR-0010.
+	Forge string
+	Kind  HostKind
 	// Protocol is "ssh" or "https", used to build clone URLs for Repos on this Host.
 	Protocol string
 }

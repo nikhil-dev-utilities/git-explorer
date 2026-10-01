@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -41,6 +43,9 @@ func Load(flags Flags, env Environ, fileBytes []byte) (Config, error) {
 
 	cfg.Log.Path = resolveLogPath(flags, env, cfg.Log.Path)
 	resolveHostDefaultTargets(&cfg)
+	if err := resolveHostForges(&cfg); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
 }
@@ -67,6 +72,36 @@ func resolveHostDefaultTargets(cfg *Config) {
 	}
 }
 
+// frontdoorsByForge lists the Frontdoors each Forge accepts; the first is its default.
+// Frontdoors belong to a single Forge (ADR-0001), so a mismatch is a config error.
+var frontdoorsByForge = map[string][]string{
+	"github":    {"gh-cli"},
+	"bitbucket": {"rest"},
+}
+
+// resolveHostForges defaults each Host's Forge to github and its Frontdoor to that
+// Forge's default, and rejects an unknown Forge or a Frontdoor from another Forge.
+func resolveHostForges(cfg *Config) error {
+	for i := range cfg.Hosts {
+		h := &cfg.Hosts[i]
+		if h.Forge == "" {
+			h.Forge = "github"
+		}
+		frontdoors, ok := frontdoorsByForge[h.Forge]
+		if !ok {
+			return fmt.Errorf("host %s: unknown forge %q (want github or bitbucket)", h.Name, h.Forge)
+		}
+		if h.Frontdoor == "" {
+			h.Frontdoor = frontdoors[0]
+		}
+		if !slices.Contains(frontdoors, h.Frontdoor) {
+			return fmt.Errorf("host %s: frontdoor %q does not belong to forge %s (want %s)",
+				h.Name, h.Frontdoor, h.Forge, strings.Join(frontdoors, ", "))
+		}
+	}
+	return nil
+}
+
 func defaultConfig() Config {
 	return Config{
 		Clone: CloneConfig{
@@ -77,7 +112,7 @@ func defaultConfig() Config {
 			MaxSizeMB: 5,
 		},
 		Hosts: []HostConfig{
-			{Name: "github.com", Frontdoor: "gh-cli", Protocol: "ssh"},
+			{Name: "github.com", Forge: "github", Frontdoor: "gh-cli", Protocol: "ssh"},
 		},
 	}
 }

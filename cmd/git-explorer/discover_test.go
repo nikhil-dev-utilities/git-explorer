@@ -43,8 +43,8 @@ func TestDiscoveredConfigHosts(t *testing.T) {
 	got := discoveredConfigHosts(auths, "/src")
 
 	want := []config.HostConfig{
-		{Name: "github.com", Frontdoor: "gh-cli", Protocol: "ssh", DefaultTarget: "/src"},
-		{Name: "ghe.corp.internal", Frontdoor: "gh-cli", Protocol: "ssh", DefaultTarget: "/src"},
+		{Name: "github.com", Forge: "github", Frontdoor: "gh-cli", Protocol: "ssh", DefaultTarget: "/src"},
+		{Name: "ghe.corp.internal", Forge: "github", Frontdoor: "gh-cli", Protocol: "ssh", DefaultTarget: "/src"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d hosts, want %d: %+v", len(got), len(want), got)
