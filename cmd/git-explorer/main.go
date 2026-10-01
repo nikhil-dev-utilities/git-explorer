@@ -13,6 +13,7 @@ import (
 	"os/exec"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
+	"github.com/nikhil-dev-utilities/git-explorer/internal/forge/bitbucket"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge/github"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/ui"
 )
@@ -74,6 +75,6 @@ func run() error {
 
 	slog.SetDefault(config.NewLogger(cfg.Log))
 
-	router := forgeRouter{"github": github.New()}
+	router := forgeRouter{"github": github.New(), "bitbucket": bitbucket.New()}
 	return ui.Run(buildDeps(router, cfg, hostsUserConfigured))
 }
