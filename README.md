@@ -67,18 +67,50 @@ and `?` shows every key.
 git-explorer creates `$XDG_CONFIG_HOME/git-explorer` (or `~/.config/git-explorer`)
 on first launch if it doesn't exist yet, along with an empty starter `config.yaml`
 there — it's inert until you edit it. Uncomment or add settings to set a default
-clone target, add additional Hosts (including self-managed GitHub Enterprise
-installs), and tune parallelism and logging. See [DESIGN.md](./DESIGN.md#config) for
-the full schema. `--config <path>` and `--log-file <path>` override it from the
-command line.
+clone target, choose which Hosts to browse (see [Hosts](#hosts-servers) below), and tune
+parallelism and logging. See [DESIGN.md](./DESIGN.md#config) for the full schema.
+`--config <path>` and `--log-file <path>` override it from the command line.
 
-### Bitbucket Cloud
+### Hosts (servers)
 
-Add `bitbucket.org` to `hosts:` with `forge: bitbucket`:
+A Host is one server git-explorer browses: `github.com`, a GitHub Enterprise install, or
+`bitbucket.org`. Hosts are listed in the config file:
+
+- `~/.config/git-explorer/config.yaml`
+- or `$XDG_CONFIG_HOME/git-explorer/config.yaml` if you set `XDG_CONFIG_HOME`
+- or any file passed with `--config <path>`
+
+**With no `hosts:` key**, git-explorer uses every GitHub Host that `gh` is logged into.
+Run `gh auth login --hostname <host>` to add one.
+
+**With a `hosts:` key**, git-explorer uses exactly that list and nothing else.
+Auto-detection is off, so list every Host you want, including the ones `gh` used to find:
 
 ```yaml
 hosts:
-  - name: github.com
+  - name: github.com                # forge: github is the default
+    protocol: ssh                   # ssh (default) | https
+  - name: ghe.corp.internal         # GitHub Enterprise; run `gh auth login --hostname ghe.corp.internal` first
+    protocol: https
+    default_target: ~/work          # optional: clone folder for this Host only
+  - name: bitbucket.org             # Bitbucket Cloud, see below
+    forge: bitbucket
+    protocol: https
+```
+
+The first Host in the list opens at startup. To switch, press `o` → **Host**, choose one,
+then press Enter. If you have Repos ticked, git-explorer asks first, because switching drops
+them. If a Host isn't authenticated, the error screen offers `y` to switch to another one.
+
+Credentials never go in this file:
+- **GitHub Hosts** use `gh`.
+- **Bitbucket** uses env vars or git's credential store (see below).
+
+#### Bitbucket Cloud
+
+Add this entry to your `hosts:` list:
+
+```yaml
   - name: bitbucket.org
     forge: bitbucket
     protocol: https     # or ssh
