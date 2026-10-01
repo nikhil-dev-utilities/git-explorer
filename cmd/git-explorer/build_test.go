@@ -17,6 +17,7 @@ func TestHostKind(t *testing.T) {
 		{"public github.com", "github.com", forge.HostPublic},
 		{"self-managed GHE", "ghe.corp.internal", forge.HostPrivate},
 		{"arbitrary hostname", "git.example.org", forge.HostPrivate},
+		{"public bitbucket.org", "bitbucket.org", forge.HostPublic},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -39,7 +40,7 @@ func TestBuildDeps_HostsKindsTargetAndClonerWiring(t *testing.T) {
 	cfg := config.Config{
 		Hosts: []config.HostConfig{
 			{Name: "github.com", Protocol: "ssh", DefaultTarget: "/src"},
-			{Name: "ghe.corp.internal", Protocol: "https", DefaultTarget: "/work"},
+			{Name: "ghe.corp.internal", Forge: "github", Protocol: "https", DefaultTarget: "/work"},
 		},
 		Clone: config.CloneConfig{Parallelism: 4},
 	}
@@ -47,7 +48,7 @@ func TestBuildDeps_HostsKindsTargetAndClonerWiring(t *testing.T) {
 	d := buildDeps(fakeForge{}, cfg, true)
 
 	if len(d.Hosts) != 2 || d.Hosts[0].Kind != forge.HostPublic || d.Hosts[1].Kind != forge.HostPrivate ||
-		d.Hosts[1].Protocol != "https" {
+		d.Hosts[1].Protocol != "https" || d.Hosts[1].Forge != "github" {
 		t.Errorf("Hosts = %+v", d.Hosts)
 	}
 	if d.CloneTarget != "/src" {

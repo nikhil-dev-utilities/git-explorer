@@ -42,6 +42,7 @@ func discoveredConfigHosts(auths []github.HostAuth, fallbackTarget string) []con
 		}
 		hosts[i] = config.HostConfig{
 			Name:          a.Name,
+			Forge:         "github",
 			Frontdoor:     "gh-cli",
 			Protocol:      protocol,
 			DefaultTarget: fallbackTarget,

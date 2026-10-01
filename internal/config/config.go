@@ -31,7 +31,10 @@ type LogConfig struct {
 
 // HostConfig declares one Host git-explorer can talk to.
 type HostConfig struct {
-	Name      string `yaml:"name"`
+	Name string `yaml:"name"`
+	// Forge is "github" (the default) or "bitbucket" — see ADR-0010.
+	Forge string `yaml:"forge"`
+	// Frontdoor must belong to Forge; empty means that Forge's default.
 	Frontdoor string `yaml:"frontdoor"`
 	Protocol  string `yaml:"protocol"`
 	// DefaultTarget, when set, overrides CloneConfig.DefaultTarget for this Host
