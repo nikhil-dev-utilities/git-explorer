@@ -4,30 +4,46 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
-func TestCheckPrerequisites_BothPresent(t *testing.T) {
-	// A dev/CI environment always has both on PATH — no fake-binary scaffolding
-	// needed for the success path.
-	if err := checkPrerequisites(); err != nil {
-		t.Errorf("checkPrerequisites() = %v, want nil (git and gh are on PATH in this environment)", err)
+// onPath fakes exec.LookPath with only the named binaries present.
+func onPath(names ...string) lookPathFunc {
+	return func(file string) (string, error) {
+		for _, n := range names {
+			if n == file {
+				return "/usr/bin/" + file, nil
+			}
+		}
+		return "", errors.New("not found")
 	}
 }
 
-func TestCheckPrerequisites_NeitherOnPath(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-
-	err := checkPrerequisites()
-	if err == nil {
-		t.Fatal("checkPrerequisites() = nil, want an error with git and gh both missing from PATH")
-	}
-
+func wantFatal(t *testing.T, err error) {
+	t.Helper()
 	var fErr *forge.Error
-	if !errors.As(err, &fErr) {
-		t.Fatalf("error = %v (%T), want a *forge.Error", err, err)
+	if !errors.As(err, &fErr) || fErr.Kind != forge.ErrKindFatal {
+		t.Errorf("error = %v, want a Fatal *forge.Error", err)
 	}
-	if fErr.Kind != forge.ErrKindFatal {
-		t.Errorf("Kind = %v, want ErrKindFatal", fErr.Kind)
+}
+
+func TestCheckGit(t *testing.T) {
+	if err := checkGit(onPath("git")); err != nil {
+		t.Errorf("checkGit with git present = %v, want nil", err)
 	}
+	wantFatal(t, checkGit(onPath()))
+}
+
+func TestCheckGh(t *testing.T) {
+	github := []config.HostConfig{{Name: "github.com", Forge: "github"}}
+	bitbucket := []config.HostConfig{{Name: "bitbucket.org", Forge: "bitbucket"}}
+
+	if err := checkGh(bitbucket, onPath()); err != nil {
+		t.Errorf("Bitbucket-only Hosts without gh = %v, want nil", err)
+	}
+	if err := checkGh(github, onPath("gh")); err != nil {
+		t.Errorf("GitHub Host with gh = %v, want nil", err)
+	}
+	wantFatal(t, checkGh(append(bitbucket, github...), onPath()))
 }
