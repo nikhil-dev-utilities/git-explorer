@@ -41,10 +41,11 @@ go install github.com/nikhil-dev-utilities/git-explorer/cmd/git-explorer@latest
 
 ### Prerequisites
 
-Either way, you need `git` and the [GitHub CLI](https://cli.github.com) (`gh`) on your
-`PATH`, and `gh` authenticated (`gh auth login`) against whichever Host you plan to
-browse. git-explorer checks for both at startup and tells you exactly what's missing
-rather than failing partway through.
+Either way, you need `git` on your `PATH`. For GitHub Hosts you also need the
+[GitHub CLI](https://cli.github.com) (`gh`), authenticated (`gh auth login`) against
+whichever Host you plan to browse. A config with only Bitbucket Hosts does not need `gh`.
+git-explorer checks at startup and tells you exactly what's missing rather than failing
+partway through.
 
 ## Quick start
 
@@ -70,6 +71,43 @@ clone target, add additional Hosts (including self-managed GitHub Enterprise
 installs), and tune parallelism and logging. See [DESIGN.md](./DESIGN.md#config) for
 the full schema. `--config <path>` and `--log-file <path>` override it from the
 command line.
+
+### Bitbucket Cloud
+
+Add `bitbucket.org` to `hosts:` with `forge: bitbucket`:
+
+```yaml
+hosts:
+  - name: github.com
+  - name: bitbucket.org
+    forge: bitbucket
+    protocol: https     # or ssh
+```
+
+Each Bitbucket Workspace you can access shows up as an Org. Its Projects are not shown.
+
+**Credentials** never go in the config file ([ADR-0011](./docs/adr/0011-bitbucket-credentials-from-env-or-git-credential-store.md)).
+
+1. Create an Atlassian API token with the `read:workspace:bitbucket` and
+   `read:repository:bitbucket` scopes. Bitbucket app passwords are retired.
+2. Give it to git-explorer in one of two ways:
+   - **Environment:** set `BITBUCKET_EMAIL` (your Atlassian email) and `BITBUCKET_API_TOKEN`.
+   - **git's credential store** (recommended, keeps the token in the macOS keychain):
+
+     ```sh
+     git config --global credential.helper osxkeychain
+     printf 'protocol=https\nhost=api.bitbucket.org\nusername=<atlassian email>\npassword=<api token>\n\n' \
+       | git credential approve
+     ```
+
+     The environment wins when both are set.
+3. For HTTPS clones, git asks the same helper for a credential for `bitbucket.org`. That
+   entry is separate, and its username is your Bitbucket username (or
+   `x-bitbucket-api-token-auth`), not your email. The password is the same API token. git
+   prompts and saves it on the first clone, or store it up front with the command above
+   using `host=bitbucket.org`.
+
+Bitbucket Data Center is not supported yet ([#110](https://github.com/nikhil-dev-utilities/git-explorer/issues/110)).
 
 The log file lives at `~/.logs/git-explorer/git-explorer.log` by default, rotated
 by size — `--log-file <path>` or `GIT_EXPLORER_LOG` override it.

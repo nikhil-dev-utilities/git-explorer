@@ -128,9 +128,9 @@ terminals.
 
 ```
   startup
-    ├─ check `git` on PATH        ─┐ actionable error, not a late failure
-    ├─ check `gh`  on PATH        ─┘
-    └─ read config → Host list, default Targets
+    ├─ check `git` on PATH          actionable error, not a late failure
+    ├─ read config → Host list, default Targets
+    └─ check `gh` on PATH           only if a Host uses the GitHub Forge
 
   Org pane          progressive: pages stream in, navigable at ~100ms
     ├─ Private Host: GET /organizations          (every Org on the instance)
@@ -138,8 +138,11 @@ terminals.
     │                + /user/repos?affiliation=collaborator (badge: collab)
     └─ Public  Host: /user/orgs + the collaborator probe only
 
+    Bitbucket Cloud: GET /2.0/user/workspaces    (badge: owner if administrator, else member)
+
   Repo pane         lazy, on Org selection
-    └─ GET /orgs/{org}/repos → name, pushed_at, archived, fork, visibility
+    ├─ GET /orgs/{org}/repos → name, pushed_at, archived, fork, visibility
+    └─ Bitbucket: GET /2.0/repositories/{workspace} → slug, updated_on, parent, is_private
 
   Clone Run         modal, one at a time
     └─ pre-flight Outcome check → clone screen (folder browser) → bounded parallel `git clone`
@@ -218,15 +221,17 @@ Org means waiting for it before reaching the next one.
 ## Architecture
 
 ```
+cmd/git-explorer/
+  router.go         forgeRouter: the one forge.Forge the UI gets; dispatches each call
+                    on the Host's Forge — see ADR-0010
 internal/forge/
   forge.go          the ONLY port the TUI sees
                       ListOrgs(ctx, Host)  → stream of []Org
                       ListRepos(ctx, Org)  → []Repo
                       CloneURL(Repo)       → string
-  github/
-    github.go       implements forge.Forge
-    frontdoor.go    unexported interface — see ADR-0001
-    fd_ghcli.go     v1 ships this one only
+  github/           GitHub (github.com + Enterprise) through the gh-cli Frontdoor
+  bitbucket/        Bitbucket Cloud through its REST API; credentials from env, then
+                    `git credential fill` — see ADR-0011
 internal/clone/     pre-flight Outcome check + parallel `git clone`
 internal/config/    hostnames, protocol, default Targets. No secrets — ADR-0004.
 internal/ui/        Glyph shell: Org and Repo panes, facets, selection, options/host/help
@@ -236,7 +241,8 @@ internal/glyphclone/  the clone screen mounted in the shell: folder browser, pre
 ```
 
 GitLab is deferred and may deserve its own model entirely; the port is shaped honestly on
-GitHub's two levels rather than generalised on spec (ADR-0001).
+GitHub's two levels rather than generalised on spec (ADR-0001). Bitbucket Cloud fits those
+two levels as Workspace → Repo, ignoring Projects (ADR-0010).
 
 ## Config
 
@@ -289,7 +295,18 @@ hosts:
     frontdoor: gh-cli
     protocol: https
     default_target: ~/work       # per-Host override
+  - name: bitbucket.org
+    forge: bitbucket             # github (default) | bitbucket
+    frontdoor: rest              # optional: defaults to the Forge's own
+    protocol: https
 ```
+
+Each Host names its Forge with `forge:` (default `github`). The `frontdoor:` must belong
+to that Forge (`gh-cli` for GitHub, `rest` for Bitbucket) and defaults to it. An unknown
+Forge or a mismatched Frontdoor fails at startup. Discovery from `gh` only ever finds
+GitHub Hosts, so Bitbucket Hosts are always declared here. `bitbucket.org` is a Public
+Host. Only Bitbucket Cloud is supported; a Bitbucket Host with any other name fails with
+a Fatal error.
 
 ## Logging
 
@@ -362,4 +379,4 @@ report, not from CI.
 - Cross-Org Selections, background or concurrent Clone Runs
 - On-disk caching
 - Language filter
-- GitLab, and the REST/GraphQL Frontdoors
+- GitLab, Bitbucket Data Center, and GitHub's REST/GraphQL Frontdoors

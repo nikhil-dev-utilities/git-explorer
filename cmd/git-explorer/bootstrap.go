@@ -37,6 +37,9 @@ const starterConfigContent = `# git-explorer config.
 #     frontdoor: gh-cli
 #     protocol: https
 #     default_target: ~/work     # overrides clone.default_target for this Host only
+#   - name: bitbucket.org        # Bitbucket Cloud; credentials never go in this file
+#     forge: bitbucket           # github (default) | bitbucket
+#     protocol: https
 
 # See DESIGN.md's Config section (or the README) for the full write-up.
 `
