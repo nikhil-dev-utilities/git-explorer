@@ -1,6 +1,6 @@
 # 011 - Merge gh-discovered Hosts with the hosts: list (#122)
 
-- status: in_progress
+- status: completed
 - last updated: 2026-10-12
 
 ## Request
@@ -18,4 +18,4 @@ on start. Agreed instead: merge discovery with the list. User: "file an issue an
 4. [x] ui.Deps: replace `HostsUserConfigured` with per-Host `ConfiguredHosts`.
 5. [x] Tests.
 6. [x] ADR-0013, README, DESIGN.md, starter config.
-7. [ ] PR, merge on user approval. No release.
+7. [x] PR #123 merged. Release PR #121 (v0.9.0) ready; merge it to publish.
