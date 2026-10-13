@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.8.0...v0.9.0) (2026-10-13)
+
+
+### Features
+
+* **bitbucket:** support Bitbucket Data Center ([#120](https://github.com/nikhil-dev-utilities/git-explorer/issues/120)) ([1beb55c](https://github.com/nikhil-dev-utilities/git-explorer/commit/1beb55c1e7238d355dcb68dee38c5fe31e82b6cf))
+* **config:** merge gh-discovered Hosts with the hosts: list ([#123](https://github.com/nikhil-dev-utilities/git-explorer/issues/123)) ([b2cf5d9](https://github.com/nikhil-dev-utilities/git-explorer/commit/b2cf5d9251fa9911e51e4fdea862e3aa51c45c9a))
+
 ## [0.8.0](https://github.com/nikhil-dev-utilities/git-explorer/compare/v0.7.0...v0.8.0) (2026-10-01)
 
 
