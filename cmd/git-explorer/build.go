@@ -12,9 +12,9 @@ import (
 // buildDeps turns an already-resolved Config and a real (or fake, in tests) forge.Forge
 // into the ui's dependencies, adding the composition-root pre-flight classifier and
 // streaming Clone Run. It performs no filesystem, network, or environment access of its
-// own, which is what makes it directly unit-testable. hostsUserConfigured says whether
-// the Hosts came from an explicit hosts: list — see ui.Deps.
-func buildDeps(f forge.Forge, cfg config.Config, hostsUserConfigured bool) ui.Deps {
+// own, which is what makes it directly unit-testable. configured names the Hosts that
+// came from the config file's hosts: list — see ui.Deps.
+func buildDeps(f forge.Forge, cfg config.Config, configured map[string]bool) ui.Deps {
 	hosts := make([]forge.Host, len(cfg.Hosts))
 	for i, h := range cfg.Hosts {
 		hosts[i] = forge.Host{
@@ -34,13 +34,13 @@ func buildDeps(f forge.Forge, cfg config.Config, hostsUserConfigured bool) ui.De
 	}
 
 	return ui.Deps{
-		Forge:               f,
-		Hosts:               hosts,
-		HostsUserConfigured: hostsUserConfigured,
-		CloneTarget:         target,
-		Parallelism:         cfg.Clone.Parallelism,
-		Preview:             previewClones,
-		Run:                 clone.RunProgress,
+		Forge:           f,
+		Hosts:           hosts,
+		ConfiguredHosts: configured,
+		CloneTarget:     target,
+		Parallelism:     cfg.Clone.Parallelism,
+		Preview:         previewClones,
+		Run:             clone.RunProgress,
 	}
 }
 

@@ -56,18 +56,15 @@ func run() error {
 		return err
 	}
 
-	// Only when the user's own config didn't declare hosts: — an explicit list
-	// always wins over discovery, even if it happens to match what discovery would
-	// have found anyway. hostsUserConfigured is also handed to buildDeps: a Fatal
-	// "not authenticated" failure against a discovered (or last-resort implicit)
-	// Host is treated more gently than one against a Host the user explicitly
-	// configured themselves — see ui.Deps.HostsUserConfigured.
-	hostsUserConfigured := fileDeclaresHosts(fileBytes)
-	if !hostsUserConfigured {
-		if discovered := github.DiscoverAuthenticatedHosts(env.Getenv); len(discovered) > 0 {
-			cfg.Hosts = discoveredConfigHosts(discovered, cfg.Clone.DefaultTarget)
-		}
+	// gh-discovered Hosts and the file's hosts: list are combined (ADR-0013). The
+	// configured set is handed to buildDeps: a Fatal "not authenticated" failure on a
+	// Host the user did not list is treated more gently — see ui.Deps.ConfiguredHosts.
+	var discovered []config.HostConfig
+	if cfg.GhDiscovery {
+		discovered = discoveredConfigHosts(github.DiscoverAuthenticatedHosts(env.Getenv), cfg.Clone.DefaultTarget)
 	}
+	var configured map[string]bool
+	cfg.Hosts, configured = resolveHosts(discovered, cfg.Hosts, fileDeclaresHosts(fileBytes))
 
 	if err := checkGh(cfg.Hosts, exec.LookPath); err != nil {
 		return err
@@ -76,5 +73,5 @@ func run() error {
 	slog.SetDefault(config.NewLogger(cfg.Log))
 
 	router := forgeRouter{"github": github.New(), "bitbucket": bitbucket.New()}
-	return ui.Run(buildDeps(router, cfg, hostsUserConfigured))
+	return ui.Run(buildDeps(router, cfg, configured))
 }

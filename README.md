@@ -80,11 +80,14 @@ A Host is one server git-explorer browses: `github.com`, a GitHub Enterprise ins
 - or `$XDG_CONFIG_HOME/git-explorer/config.yaml` if you set `XDG_CONFIG_HOME`
 - or any file passed with `--config <path>`
 
-**With no `hosts:` key**, git-explorer uses every GitHub Host that `gh` is logged into.
-Run `gh auth login --hostname <host>` to add one.
+git-explorer always uses every GitHub Host that `gh` is logged into. Run
+`gh auth login --hostname <host>` to add one. These Hosts come first in the list.
 
-**With a `hosts:` key**, git-explorer uses exactly that list and nothing else.
-Auto-detection is off, so list every Host you want, including the ones `gh` used to find:
+**A `hosts:` key adds to them.** List only the extra Hosts, such as Bitbucket. An entry
+with the same name as a `gh` Host replaces it, which is how you change its `protocol`
+or `default_target`. To use exactly your list and nothing from `gh`, set
+`gh_discovery: false` ([ADR-0013](./docs/adr/0013-gh-discovered-hosts-merge-with-the-hosts-list.md)).
+For example:
 
 ```yaml
 hosts:
@@ -98,7 +101,8 @@ hosts:
     protocol: https
 ```
 
-The first Host in the list opens at startup. To switch, press `o` → **Host**, choose one,
+The first Host opens at startup: the first `gh` Host, or the first listed one when `gh`
+finds none. To switch, press `o` → **Host**, choose one,
 then press Enter. If you have Repos ticked, git-explorer asks first, because switching drops
 them. If a Host isn't authenticated, the error screen offers `y` to switch to another one.
 

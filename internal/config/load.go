@@ -114,6 +114,7 @@ func defaultConfig() Config {
 		Hosts: []HostConfig{
 			{Name: "github.com", Forge: "github", Frontdoor: "gh-cli", Protocol: "ssh"},
 		},
+		GhDiscovery: true,
 	}
 }
 

@@ -45,13 +45,15 @@ type cachedRepos struct {
 
 // Deps is everything the UI needs from outside; it never imports a Forge implementation.
 type Deps struct {
-	Forge               forge.Forge
-	Hosts               []forge.Host
-	HostsUserConfigured bool
-	CloneTarget         string
-	Parallelism         int
-	Preview             glyphclone.PreviewFunc
-	Run                 glyphclone.RunFunc
+	Forge forge.Forge
+	Hosts []forge.Host
+	// ConfiguredHosts names the Hosts the user listed in the config file. Any other
+	// Host came from gh discovery or the implicit github.com default.
+	ConfiguredHosts map[string]bool
+	CloneTarget     string
+	Parallelism     int
+	Preview         glyphclone.PreviewFunc
+	Run             glyphclone.RunFunc
 }
 
 var (
@@ -388,12 +390,12 @@ func retryAfter(err error) time.Duration {
 	return 0
 }
 
-// errorKind is classify, except a Fatal is downgraded to pane-scoped when the Host came
-// from discovery rather than the user's own config: nothing was misconfigured, there was
-// just nothing to find yet.
+// errorKind is classify, except a Fatal is downgraded to pane-scoped when the active Host
+// came from discovery rather than the user's own config: nothing was misconfigured, there
+// was just nothing to find yet.
 func (s *state) errorKind(err error) forge.ErrorKind {
 	kind := classify(err)
-	if kind == forge.ErrKindFatal && !s.d.HostsUserConfigured {
+	if kind == forge.ErrKindFatal && !s.d.ConfiguredHosts[s.activeHost().Name] {
 		return forge.ErrKindPaneScoped
 	}
 	return kind

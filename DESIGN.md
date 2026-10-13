@@ -94,8 +94,8 @@ Errors are scoped to their blast radius rather than funnelled through one widget
 - **Fatal** — full screen, with the exact command to fix it. Missing `git` or `gh`, or no
   `gh` auth for the active Host. Nothing else in the app works, so nothing else is shown.
   Offers `y` to pick another Host rather than only `^c` to quit. Reserved for a Host the
-  user explicitly configured themselves failing auth — a real misconfiguration. When the
-  active Host instead came from zero-config discovery (or its last-resort implicit
+  user explicitly listed in `hosts:` failing auth — a real misconfiguration. When the
+  active Host instead came from discovery (or its last-resort implicit
   `github.com` default), the identical "not authenticated" failure downgrades to
   pane-scoped instead: nothing was misconfigured, there was just nothing to discover yet.
 - **Pane-scoped** — inline in the affected pane, *keeping whatever already loaded*. A
@@ -267,8 +267,9 @@ fields) to discover which Host(s) the user is actually authenticated to, and use
 those, gh-cli Frontdoor, no default Target so the clone dialog opens empty. This is
 what makes a GHE-only user (never logged into `github.com` at all) work out of the
 box. Falls back to the implicit `github.com` Host only if gh's own file is missing or
-unreadable. An explicit `hosts:` list in config.yaml always wins over discovery,
-even one that happens to declare the exact same Host discovery would have found.
+unreadable. A `hosts:` list in config.yaml is added to the discovered Hosts, after
+them; an entry with a discovered Host's name replaces it in place. `gh_discovery: false`
+turns discovery off, so the Hosts are exactly the `hosts:` list (ADR-0013).
 
 **Bootstrapped on first launch.** This one reverses an earlier decision: git-explorer
 now creates `$XDG_CONFIG_HOME/git-explorer` (or the `~/.config` fallback) itself if it

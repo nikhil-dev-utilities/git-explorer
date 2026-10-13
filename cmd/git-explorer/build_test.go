@@ -45,7 +45,7 @@ func TestBuildDeps_HostsKindsTargetAndClonerWiring(t *testing.T) {
 		Clone: config.CloneConfig{Parallelism: 4},
 	}
 
-	d := buildDeps(fakeForge{}, cfg, true)
+	d := buildDeps(fakeForge{}, cfg, map[string]bool{"github.com": true})
 
 	if len(d.Hosts) != 2 || d.Hosts[0].Kind != forge.HostPublic || d.Hosts[1].Kind != forge.HostPrivate ||
 		d.Hosts[1].Protocol != "https" || d.Hosts[1].Forge != "github" {
@@ -54,8 +54,8 @@ func TestBuildDeps_HostsKindsTargetAndClonerWiring(t *testing.T) {
 	if d.CloneTarget != "/src" {
 		t.Errorf("CloneTarget = %q, want the first Host's DefaultTarget", d.CloneTarget)
 	}
-	if d.Parallelism != 4 || !d.HostsUserConfigured {
-		t.Errorf("Parallelism=%d HostsUserConfigured=%v", d.Parallelism, d.HostsUserConfigured)
+	if d.Parallelism != 4 || !d.ConfiguredHosts["github.com"] {
+		t.Errorf("Parallelism=%d ConfiguredHosts=%v", d.Parallelism, d.ConfiguredHosts)
 	}
 	if d.Preview == nil || d.Run == nil {
 		t.Error("clone preview and runner must be wired")

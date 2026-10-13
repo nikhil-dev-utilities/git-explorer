@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/nikhil-dev-utilities/git-explorer/internal/config"
@@ -53,5 +54,45 @@ func TestDiscoveredConfigHosts(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("host[%d] = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+}
+
+func TestResolveHosts(t *testing.T) {
+	ghe := config.HostConfig{Name: "ghe.corp", Forge: "github", Protocol: "ssh"}
+	gh := config.HostConfig{Name: "github.com", Forge: "github", Protocol: "ssh"}
+	gheHTTPS := config.HostConfig{Name: "ghe.corp", Forge: "github", Protocol: "https"}
+	bb := config.HostConfig{Name: "bitbucket.org", Forge: "bitbucket", Protocol: "https"}
+
+	tests := []struct {
+		name           string
+		discovered     []config.HostConfig
+		file           []config.HostConfig
+		declared       bool
+		want           []config.HostConfig
+		wantConfigured []string
+	}{
+		{"no hosts key uses discovery", []config.HostConfig{ghe}, []config.HostConfig{gh}, false, []config.HostConfig{ghe}, nil},
+		{"no hosts key, nothing discovered keeps the implicit default", nil, []config.HostConfig{gh}, false, []config.HostConfig{gh}, nil},
+		{"file hosts follow discovered ones", []config.HostConfig{ghe}, []config.HostConfig{bb}, true,
+			[]config.HostConfig{ghe, bb}, []string{"bitbucket.org"}},
+		{"a file entry overrides a discovered host in place", []config.HostConfig{gh, ghe}, []config.HostConfig{bb, gheHTTPS}, true,
+			[]config.HostConfig{gh, gheHTTPS, bb}, []string{"bitbucket.org", "ghe.corp"}},
+		{"discovery off (nil) is exactly the file list", nil, []config.HostConfig{bb}, true, []config.HostConfig{bb}, []string{"bitbucket.org"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, configured := resolveHosts(tt.discovered, tt.file, tt.declared)
+			if fmt.Sprint(got) != fmt.Sprint(tt.want) {
+				t.Errorf("hosts = %v, want %v", got, tt.want)
+			}
+			if len(configured) != len(tt.wantConfigured) {
+				t.Errorf("configured = %v, want %v", configured, tt.wantConfigured)
+			}
+			for _, n := range tt.wantConfigured {
+				if !configured[n] {
+					t.Errorf("configured = %v, missing %s", configured, n)
+				}
+			}
+		})
 	}
 }

@@ -9,6 +9,9 @@ type Config struct {
 	Clone CloneConfig  `yaml:"clone"`
 	Log   LogConfig    `yaml:"log"`
 	Hosts []HostConfig `yaml:"hosts"`
+	// GhDiscovery adds every Host gh is logged into to Hosts. Default true; false
+	// means Hosts is exactly the hosts: list (ADR-0013).
+	GhDiscovery bool `yaml:"gh_discovery"`
 }
 
 // CloneConfig holds settings for the clone dialog and Clone Run.

@@ -23,13 +23,13 @@ type harness struct {
 func mount(t *testing.T, f *fakeForge, userConfigured bool) *harness {
 	t.Helper()
 	d := Deps{
-		Forge:               f,
-		Hosts:               []forge.Host{{Name: "github.com"}, {Name: "ghe.corp"}},
-		HostsUserConfigured: userConfigured,
-		Parallelism:         4,
-		CloneTarget:         t.TempDir(),
-		Preview:             fakePreview,
-		Run:                 fakeRun,
+		Forge:           f,
+		Hosts:           []forge.Host{{Name: "github.com"}, {Name: "ghe.corp"}},
+		ConfiguredHosts: configuredIf(userConfigured),
+		Parallelism:     4,
+		CloneTarget:     t.TempDir(),
+		Preview:         fakePreview,
+		Run:             fakeRun,
 	}
 	sync := func(fn func()) { fn() }
 	s := newState(d, sync, sync, func() {})
