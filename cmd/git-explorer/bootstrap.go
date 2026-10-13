@@ -29,7 +29,8 @@ const starterConfigContent = `# git-explorer config.
 #   level: info                  # debug | info | warn | error | off
 #   max_size_mb: 5               # log file is rotated once it reaches this size
 
-# hosts:                         # omit entirely to auto-detect from gh's own auth state
+# gh_discovery: false            # default true: Hosts gh is logged into come first
+# hosts:                         # added after the gh Hosts; a same-name entry replaces one
 #   - name: github.com
 #     frontdoor: gh-cli
 #     protocol: ssh               # ssh | https
