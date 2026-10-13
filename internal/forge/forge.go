@@ -95,6 +95,10 @@ type Repo struct {
 	Archived   bool
 	Fork       bool
 	Visibility Visibility
+	// CloneLink is a clone URL the Forge supplied at listing time, for a Forge whose
+	// clone URLs cannot be built from Org and Name (Bitbucket Data Center: its ssh port
+	// and context path vary per instance). Empty for every other Forge.
+	CloneLink string
 }
 
 // OrgPage is one batch of Orgs delivered by ListOrgs. Err, when non-nil, ends the stream

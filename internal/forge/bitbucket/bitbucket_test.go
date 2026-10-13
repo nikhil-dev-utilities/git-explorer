@@ -33,6 +33,7 @@ func newTestAdapter(t *testing.T, routes map[string]http.HandlerFunc) (*Adapter,
 	a := &Adapter{
 		http:    srv.Client(),
 		baseURL: srv.URL + "/2.0",
+		dcBase:  func(string) string { return srv.URL + "/rest/api/1.0" },
 		getenv:  func(string) string { return "" },
 		fill: func(context.Context, string) (credential, bool, error) {
 			lookups++
@@ -172,10 +173,116 @@ func TestListRepos_RefusesANextLinkToAnotherHost(t *testing.T) {
 	}
 }
 
-func TestListOrgs_DataCenterHostIsFatal(t *testing.T) {
-	_, err := New().ListOrgs(context.Background(), forge.Host{Name: "bitbucket.corp.internal", Forge: "bitbucket"})
-	var fErr *forge.Error
-	if !errors.As(err, &fErr) || fErr.Kind != forge.ErrKindFatal {
-		t.Errorf("error = %v, want Fatal", err)
+var dc = forge.Host{Name: "bitbucket.corp.internal", Forge: "bitbucket", Kind: forge.HostPrivate, Protocol: "ssh"}
+
+func TestListOrgs_DataCenterStreamsProjects(t *testing.T) {
+	a, lookups := newTestAdapter(t, map[string]http.HandlerFunc{
+		"/rest/api/1.0/projects": func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("start") == "1" {
+				fmt.Fprint(w, `{"values":[{"key":"OPS"}],"isLastPage":true}`)
+				return
+			}
+			fmt.Fprint(w, `{"values":[{"key":"PRJ"}],"isLastPage":false,"nextPageStart":1}`)
+		},
+	})
+	ch, err := a.ListOrgs(context.Background(), dc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var orgs []forge.Org
+	for p := range ch {
+		if p.Err != nil {
+			t.Fatal(p.Err)
+		}
+		orgs = append(orgs, p.Orgs...)
+	}
+	want := []forge.Org{{Name: "PRJ", Host: dc}, {Name: "OPS", Host: dc}}
+	if len(orgs) != 2 || orgs[0] != want[0] || orgs[1] != want[1] {
+		t.Errorf("orgs = %+v, want %+v", orgs, want)
+	}
+	if *lookups != 1 {
+		t.Errorf("credential looked up %d times, want 1", *lookups)
+	}
+}
+
+func TestListRepos_DataCenterMapsFieldsAndCloneLinks(t *testing.T) {
+	a, _ := newTestAdapter(t, map[string]http.HandlerFunc{
+		"/rest/api/1.0/projects/PRJ/repos": func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("start") == "1" {
+				fmt.Fprint(w, `{"values":[{"slug":"web","public":true,"archived":true,"origin":{"slug":"up"},
+					"links":{"clone":[{"name":"http","href":"https://me@bitbucket.corp.internal/scm/prj/web.git"}]}}],"isLastPage":true}`)
+				return
+			}
+			fmt.Fprint(w, `{"values":[{"slug":"api","public":false,
+				"links":{"clone":[{"name":"http","href":"https://me@bitbucket.corp.internal/scm/prj/api.git"},
+				{"name":"ssh","href":"ssh://git@bitbucket.corp.internal:7999/prj/api.git"}]}}],"isLastPage":false,"nextPageStart":1}`)
+		},
+	})
+	repos, err := a.ListRepos(context.Background(), forge.Org{Name: "PRJ", Host: dc})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []forge.Repo{
+		{Name: "api", Org: "PRJ", Host: dc, Visibility: forge.VisibilityPrivate, CloneLink: "ssh://git@bitbucket.corp.internal:7999/prj/api.git"},
+		// No ssh link listed: the http link is used, without the embedded user.
+		{Name: "web", Org: "PRJ", Host: dc, Archived: true, Fork: true, Visibility: forge.VisibilityPublic,
+			CloneLink: "https://bitbucket.corp.internal/scm/prj/web.git"},
+	}
+	if len(repos) != 2 || repos[0] != want[0] || repos[1] != want[1] {
+		t.Fatalf("repos = %+v\nwant %+v", repos, want)
+	}
+	if got := a.CloneURL(repos[0]); got != want[0].CloneLink {
+		t.Errorf("CloneURL = %q", got)
+	}
+
+	https := dc
+	https.Protocol = "https"
+	repos, _ = a.ListRepos(context.Background(), forge.Org{Name: "PRJ", Host: https})
+	if len(repos) == 0 || repos[0].CloneLink != "https://bitbucket.corp.internal/scm/prj/api.git" {
+		t.Errorf("https repos = %+v", repos)
+	}
+}
+
+func TestDataCenterAndCloudKeepSeparateCredentials(t *testing.T) {
+	a, lookups := newTestAdapter(t, map[string]http.HandlerFunc{
+		"/rest/api/1.0/projects": func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `{"values":[],"isLastPage":true}`)
+		},
+		"/2.0/user/workspaces": func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"values":[]}`) },
+	})
+	var hosts []string
+	fill := a.fill
+	a.fill = func(ctx context.Context, h string) (credential, bool, error) {
+		hosts = append(hosts, h)
+		return fill(ctx, h)
+	}
+	for _, h := range []forge.Host{dc, cloud, dc} {
+		if _, err := a.ListOrgs(context.Background(), h); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if *lookups != 2 || hosts[0] != "bitbucket.corp.internal" {
+		t.Errorf("lookups = %d for hosts %v, want one per Host, Data Center asking for its own host", *lookups, hosts)
+	}
+}
+
+func TestDataCenterBearerTokenFromEnvironment(t *testing.T) {
+	var auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		fmt.Fprint(w, `{"values":[],"isLastPage":true}`)
+	}))
+	t.Cleanup(srv.Close)
+	a := &Adapter{
+		http:   srv.Client(),
+		dcBase: func(string) string { return srv.URL },
+		getenv: env(map[string]string{"BITBUCKET_TOKEN": secret, "BITBUCKET_EMAIL": "cloud@example.com", "BITBUCKET_API_TOKEN": "cloud"}),
+		fill:   fillMustNotRun(t),
+	}
+	if _, err := a.ListOrgs(context.Background(), dc); err != nil {
+		t.Fatal(err)
+	}
+	if auth != "Bearer "+secret {
+		t.Errorf("Authorization = %q, want the Bearer token", auth)
 	}
 }

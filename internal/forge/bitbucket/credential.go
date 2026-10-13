@@ -1,5 +1,5 @@
-// Package bitbucket is the Bitbucket Cloud Forge adapter. It reaches Bitbucket through
-// one private Frontdoor, its REST API (ADR-0001, ADR-0010).
+// Package bitbucket is the Bitbucket Cloud and Data Center Forge adapter. It reaches
+// Bitbucket through one private Frontdoor, its REST API (ADR-0001, ADR-0010, ADR-0012).
 package bitbucket
 
 import (
@@ -16,8 +16,10 @@ import (
 	"github.com/nikhil-dev-utilities/git-explorer/internal/forge"
 )
 
-// credential is a Basic-auth pair for the REST API: the Atlassian account email and an
-// API token. It is held in memory only and must never be logged or put in an error.
+// credential is what the REST API authenticates with. With a username it is a
+// Basic-auth pair: on Cloud the Atlassian email and an API token, on Data Center the
+// username and an HTTP access token. With no username, password is a Data Center
+// Bearer token. It is held in memory only and must never be logged or put in an error.
 type credential struct {
 	username string
 	password string
@@ -28,18 +30,26 @@ type credential struct {
 type credentialFillFunc func(ctx context.Context, host string) (cred credential, ok bool, err error)
 
 // resolveCredential finds the credential for apiHost, in the order ADR-0011 fixes:
-// BITBUCKET_EMAIL + BITBUCKET_API_TOKEN from the environment, then git's credential
-// store. Every failure is Fatal: nothing on this Host works without a credential.
-func resolveCredential(ctx context.Context, getenv func(string) string, fill credentialFillFunc, apiHost string) (credential, error) {
-	email, token := getenv("BITBUCKET_EMAIL"), getenv("BITBUCKET_API_TOKEN")
-	switch {
-	case email != "" && token != "":
-		slog.DebugContext(ctx, "bitbucket credential from environment", "host", apiHost)
-		return credential{username: email, password: token}, nil
-	case email != "" || token != "":
-		return credential{}, &forge.Error{
-			Kind:    forge.ErrKindFatal,
-			Message: "set both BITBUCKET_EMAIL and BITBUCKET_API_TOKEN, or neither.",
+// the environment, then git's credential store. On Cloud the environment is
+// BITBUCKET_EMAIL + BITBUCKET_API_TOKEN; on Data Center it is BITBUCKET_TOKEN
+// (ADR-0012). Every failure is Fatal: nothing on this Host works without a credential.
+func resolveCredential(ctx context.Context, getenv func(string) string, fill credentialFillFunc, apiHost string, dataCenter bool) (credential, error) {
+	if dataCenter {
+		if token := getenv("BITBUCKET_TOKEN"); token != "" {
+			slog.DebugContext(ctx, "bitbucket credential from environment", "host", apiHost)
+			return credential{password: token}, nil
+		}
+	} else {
+		email, token := getenv("BITBUCKET_EMAIL"), getenv("BITBUCKET_API_TOKEN")
+		switch {
+		case email != "" && token != "":
+			slog.DebugContext(ctx, "bitbucket credential from environment", "host", apiHost)
+			return credential{username: email, password: token}, nil
+		case email != "" || token != "":
+			return credential{}, &forge.Error{
+				Kind:    forge.ErrKindFatal,
+				Message: "set both BITBUCKET_EMAIL and BITBUCKET_API_TOKEN, or neither.",
+			}
 		}
 	}
 
@@ -48,19 +58,23 @@ func resolveCredential(ctx context.Context, getenv func(string) string, fill cre
 		slog.WarnContext(ctx, "git credential fill failed", "host", apiHost, "error", err)
 	}
 	if err != nil || !ok {
-		return credential{}, notAuthenticatedError(apiHost, err)
+		return credential{}, notAuthenticatedError(apiHost, dataCenter, err)
 	}
 	slog.DebugContext(ctx, "bitbucket credential from git credential store", "host", apiHost)
 	return cred, nil
 }
 
-func notAuthenticatedError(apiHost string, cause error) error {
+func notAuthenticatedError(apiHost string, dataCenter bool, cause error) error {
+	env, user, token := "BITBUCKET_EMAIL and BITBUCKET_API_TOKEN", "<email>", "<api token>"
+	if dataCenter {
+		env, user, token = "BITBUCKET_TOKEN", "<username>", "<http access token>"
+	}
 	return &forge.Error{
 		Kind: forge.ErrKindFatal,
 		Message: fmt.Sprintf(
-			"not authenticated for %s. Set BITBUCKET_EMAIL and BITBUCKET_API_TOKEN, or store them in git's credential helper: "+
-				"printf 'protocol=https\\nhost=%s\\nusername=<email>\\npassword=<api token>\\n\\n' | git credential approve",
-			apiHost, apiHost),
+			"not authenticated for %s. Set %s, or store a credential in git's credential helper: "+
+				"printf 'protocol=https\\nhost=%s\\nusername=%s\\npassword=%s\\n\\n' | git credential approve",
+			apiHost, env, apiHost, user, token),
 		Err: cause,
 	}
 }

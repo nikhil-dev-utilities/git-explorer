@@ -73,8 +73,8 @@ parallelism and logging. See [DESIGN.md](./DESIGN.md#config) for the full schema
 
 ### Hosts (servers)
 
-A Host is one server git-explorer browses: `github.com`, a GitHub Enterprise install, or
-`bitbucket.org`. Hosts are listed in the config file:
+A Host is one server git-explorer browses: `github.com`, a GitHub Enterprise install,
+`bitbucket.org`, or a Bitbucket Data Center install. Hosts are listed in the config file:
 
 - `~/.config/git-explorer/config.yaml`
 - or `$XDG_CONFIG_HOME/git-explorer/config.yaml` if you set `XDG_CONFIG_HOME`
@@ -139,7 +139,31 @@ Each Bitbucket Workspace you can access shows up as an Org. Its Projects are not
    prompts and saves it on the first clone, or store it up front with the command above
    using `host=bitbucket.org`.
 
-Bitbucket Data Center is not supported yet ([#110](https://github.com/nikhil-dev-utilities/git-explorer/issues/110)).
+#### Bitbucket Data Center
+
+Any Bitbucket Host not named `bitbucket.org` is treated as Data Center
+([ADR-0012](./docs/adr/0012-bitbucket-data-center-is-inferred-from-the-host-name.md)):
+
+```yaml
+  - name: bitbucket.corp.internal
+    forge: bitbucket
+    protocol: ssh       # or https
+```
+
+Every Project on the instance shows up as an Org. Personal projects are not shown.
+
+1. Create a personal HTTP access token with Project read and Repository read permission.
+2. Give it to git-explorer in one of two ways:
+   - **Environment:** set `BITBUCKET_TOKEN`.
+   - **git's credential store** (recommended). The same entry also serves HTTPS clones:
+
+     ```sh
+     printf 'protocol=https\nhost=bitbucket.corp.internal\nusername=<username>\npassword=<http access token>\n\n' \
+       | git credential approve
+     ```
+
+The REST API must be at `https://<host>/rest/api/1.0`. Instances under a context path are
+not supported yet.
 
 The log file lives at `~/.logs/git-explorer/git-explorer.log` by default, rotated
 by size — `--log-file <path>` or `GIT_EXPLORER_LOG` override it.

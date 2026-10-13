@@ -15,25 +15,29 @@ import (
 
 var _ forge.Forge = (*Adapter)(nil)
 
-// cloudHost is the only Host this adapter serves. Data Center is a different API (#110).
+// cloudHost is Bitbucket Cloud. Every other Bitbucket Host is Data Center (ADR-0012).
 const cloudHost = "bitbucket.org"
 
-// Adapter implements forge.Forge for Bitbucket Cloud. Construct it with New.
+func isDataCenter(host forge.Host) bool { return host.Name != cloudHost }
+
+// Adapter implements forge.Forge for Bitbucket Cloud and Data Center. Construct it with New.
 type Adapter struct {
 	http    *http.Client
-	baseURL string // REST API root, e.g. https://api.bitbucket.org/2.0
+	baseURL string                   // Cloud REST API root, e.g. https://api.bitbucket.org/2.0
+	dcBase  func(host string) string // Data Center REST API root for a host
 	getenv  func(string) string
 	fill    credentialFillFunc
 
-	mu   sync.Mutex
-	cred *credential // resolved once per session, dropped on a 401
+	mu    sync.Mutex
+	creds map[string]credential // by Host name, resolved once per session, dropped on a 401
 }
 
-// New returns an Adapter that talks to the real Bitbucket Cloud API.
+// New returns an Adapter that talks to the real Bitbucket APIs.
 func New() *Adapter {
 	return &Adapter{
 		http:    &http.Client{Timeout: 30 * time.Second},
 		baseURL: "https://api.bitbucket.org/2.0",
+		dcBase:  func(host string) string { return "https://" + host + "/rest/api/1.0" },
 		getenv:  os.Getenv,
 		fill:    gitCredentialFill,
 	}
@@ -43,15 +47,12 @@ func New() *Adapter {
 // caller can access, which is the Public Host rule of ADR-0002. The list is small, so
 // it is fetched synchronously and delivered as one page.
 func (a *Adapter) ListOrgs(ctx context.Context, host forge.Host) (<-chan forge.OrgPage, error) {
-	if host.Name != cloudHost {
-		return nil, &forge.Error{
-			Kind:    forge.ErrKindFatal,
-			Message: fmt.Sprintf("%s: only Bitbucket Cloud (bitbucket.org) is supported, not Data Center.", host.Name),
-		}
+	if isDataCenter(host) {
+		return a.listProjects(ctx, host)
 	}
 	slog.InfoContext(ctx, "listing orgs", "host", host.Name)
 
-	entries, err := fetchAll[workspaceAccess](ctx, a, a.baseURL+"/user/workspaces?pagelen=100")
+	entries, err := fetchAll[workspaceAccess](ctx, a, host, a.baseURL+"/user/workspaces?pagelen=100")
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,10 @@ type workspaceAccess struct {
 // ListRepos lists every Repo in the Workspace the credential can see. Projects are
 // ignored (ADR-0010). Bitbucket has no archived flag, so Archived is always false.
 func (a *Adapter) ListRepos(ctx context.Context, org forge.Org) ([]forge.Repo, error) {
-	entries, err := fetchAll[repoEntry](ctx, a, a.baseURL+"/repositories/"+url.PathEscape(org.Name)+"?pagelen=100")
+	if isDataCenter(org.Host) {
+		return a.listProjectRepos(ctx, org)
+	}
+	entries, err := fetchAll[repoEntry](ctx, a, org.Host, a.baseURL+"/repositories/"+url.PathEscape(org.Name)+"?pagelen=100")
 	if err != nil {
 		return nil, err
 	}
@@ -116,8 +120,12 @@ type repoEntry struct {
 // CloneURL builds the clone URL from the Workspace and Repo slugs. Bitbucket's own
 // links.clone https entry embeds the API user (an email), which is the wrong username
 // for git (ADR-0011), so the URL is built here instead. Any Protocol other than
-// "https" is treated as ssh, as for GitHub.
+// "https" is treated as ssh, as for GitHub. On Data Center the link listed with the
+// Repo is used as is.
 func (a *Adapter) CloneURL(repo forge.Repo) string {
+	if isDataCenter(repo.Host) {
+		return repo.CloneLink
+	}
 	if repo.Host.Protocol == "https" {
 		return fmt.Sprintf("https://%s/%s/%s.git", repo.Host.Name, repo.Org, repo.Name)
 	}

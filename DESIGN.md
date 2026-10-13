@@ -139,10 +139,12 @@ terminals.
     └─ Public  Host: /user/orgs + the collaborator probe only
 
     Bitbucket Cloud: GET /2.0/user/workspaces    (badge: owner if administrator, else member)
+    Bitbucket DC:    GET /rest/api/1.0/projects  (every Project; badge: none)
 
   Repo pane         lazy, on Org selection
     ├─ GET /orgs/{org}/repos → name, pushed_at, archived, fork, visibility
-    └─ Bitbucket: GET /2.0/repositories/{workspace} → slug, updated_on, parent, is_private
+    ├─ Bitbucket: GET /2.0/repositories/{workspace} → slug, updated_on, parent, is_private
+    └─ Bitbucket DC: GET /rest/api/1.0/projects/{key}/repos → slug, public, archived, origin, links.clone
 
   Clone Run         modal, one at a time
     └─ pre-flight Outcome check → clone screen (folder browser) → bounded parallel `git clone`
@@ -230,8 +232,8 @@ internal/forge/
                       ListRepos(ctx, Org)  → []Repo
                       CloneURL(Repo)       → string
   github/           GitHub (github.com + Enterprise) through the gh-cli Frontdoor
-  bitbucket/        Bitbucket Cloud through its REST API; credentials from env, then
-                    `git credential fill` — see ADR-0011
+  bitbucket/        Bitbucket Cloud and Data Center through their REST APIs; credentials
+                    from env, then `git credential fill` — see ADR-0011, ADR-0012
 internal/clone/     pre-flight Outcome check + parallel `git clone`
 internal/config/    hostnames, protocol, default Targets. No secrets — ADR-0004.
 internal/ui/        Glyph shell: Org and Repo panes, facets, selection, options/host/help
@@ -242,7 +244,8 @@ internal/glyphclone/  the clone screen mounted in the shell: folder browser, pre
 
 GitLab is deferred and may deserve its own model entirely; the port is shaped honestly on
 GitHub's two levels rather than generalised on spec (ADR-0001). Bitbucket Cloud fits those
-two levels as Workspace → Repo, ignoring Projects (ADR-0010).
+two levels as Workspace → Repo, ignoring Projects (ADR-0010). Bitbucket Data Center fits
+them as Project → Repo (ADR-0012).
 
 ## Config
 
@@ -305,8 +308,8 @@ Each Host names its Forge with `forge:` (default `github`). The `frontdoor:` mus
 to that Forge (`gh-cli` for GitHub, `rest` for Bitbucket) and defaults to it. An unknown
 Forge or a mismatched Frontdoor fails at startup. Discovery from `gh` only ever finds
 GitHub Hosts, so Bitbucket Hosts are always declared here. `bitbucket.org` is a Public
-Host. Only Bitbucket Cloud is supported; a Bitbucket Host with any other name fails with
-a Fatal error.
+Host (Bitbucket Cloud). A Bitbucket Host with any other name is a Private Host running
+Bitbucket Data Center (ADR-0012).
 
 ## Logging
 
@@ -379,4 +382,4 @@ report, not from CI.
 - Cross-Org Selections, background or concurrent Clone Runs
 - On-disk caching
 - Language filter
-- GitLab, Bitbucket Data Center, and GitHub's REST/GraphQL Frontdoors
+- GitLab, and GitHub's REST/GraphQL Frontdoors
