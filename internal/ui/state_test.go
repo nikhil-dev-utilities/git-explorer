@@ -36,13 +36,21 @@ func defaultFake() *fakeForge {
 	}
 }
 
+// configuredIf marks both test Hosts as listed in the config file, or neither.
+func configuredIf(yes bool) map[string]bool {
+	if !yes {
+		return nil
+	}
+	return map[string]bool{"github.com": true, "ghe.corp": true}
+}
+
 func newTest(t *testing.T, f *fakeForge, userConfigured bool) *state {
 	t.Helper()
 	d := Deps{
-		Forge:               f,
-		Hosts:               []forge.Host{{Name: "github.com"}, {Name: "ghe.corp"}},
-		HostsUserConfigured: userConfigured,
-		Parallelism:         4,
+		Forge:           f,
+		Hosts:           []forge.Host{{Name: "github.com"}, {Name: "ghe.corp"}},
+		ConfiguredHosts: configuredIf(userConfigured),
+		Parallelism:     4,
 	}
 	sync := func(fn func()) { fn() }
 	s := newState(d, sync, sync, func() {})
@@ -305,6 +313,16 @@ func TestFailureSurfaces(t *testing.T) {
 		}
 	})
 
+	t.Run("fatal downgrades for a discovered host even when another host is configured", func(t *testing.T) {
+		d := Deps{Forge: &fakeForge{orgsErr: fatal}, Hosts: []forge.Host{{Name: "github.com"}, {Name: "bitbucket.org"}},
+			ConfiguredHosts: map[string]bool{"bitbucket.org": true}}
+		sync := func(fn func()) { fn() }
+		s := newState(d, sync, sync, func() {})
+		if s.mode != modeBrowse || s.orgsErr == nil {
+			t.Errorf("mode=%v orgsErr=%v, want a pane error on the discovered active host", s.mode, s.orgsErr)
+		}
+	})
+
 	t.Run("pane error mid-stream keeps loaded orgs", func(t *testing.T) {
 		f := &fakeForge{pages: map[string][]forge.OrgPage{"github.com": {
 			{Orgs: []forge.Org{org("acme", forge.AffiliationOwner)}},
@@ -342,7 +360,7 @@ func TestFailureSurfaces(t *testing.T) {
 
 func TestStaleLoadsAreDropped(t *testing.T) {
 	var queue []func()
-	d := Deps{Forge: defaultFake(), Hosts: []forge.Host{{Name: "github.com"}}, HostsUserConfigured: true}
+	d := Deps{Forge: defaultFake(), Hosts: []forge.Host{{Name: "github.com"}}, ConfiguredHosts: map[string]bool{"github.com": true}}
 	s := newState(d, func(f func()) { queue = append(queue, f) }, func(f func()) { f() }, func() {})
 	first := queue[0]
 	s.loadOrgs() // a second load supersedes the first

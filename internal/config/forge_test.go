@@ -42,3 +42,12 @@ func TestLoad_RejectsBadForgeOrFrontdoor(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_GhDiscovery(t *testing.T) {
+	for yaml, want := range map[string]bool{"": true, "gh_discovery: false\n": false} {
+		cfg, err := Load(Flags{}, MapEnviron{"HOME": "/home/nikhil"}, []byte(yaml))
+		if err != nil || cfg.GhDiscovery != want {
+			t.Errorf("Load(%q).GhDiscovery = %v, %v; want %v", yaml, cfg.GhDiscovery, err, want)
+		}
+	}
+}

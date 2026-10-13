@@ -27,6 +27,41 @@ func fileDeclaresHosts(fileBytes []byte) bool {
 	return probe.Hosts != nil
 }
 
+// resolveHosts combines gh-discovered Hosts with the file's hosts: list (ADR-0013).
+// Discovered Hosts come first, so adding a Host never changes the one that opens at
+// startup. A file entry with a discovered Host's name replaces it in place; the other
+// file entries follow in file order. With no hosts: key and nothing discovered, the
+// file Hosts are config.Load's implicit github.com default. configured holds the names
+// that came from the file.
+func resolveHosts(discovered, fileHosts []config.HostConfig, declared bool) (hosts []config.HostConfig, configured map[string]bool) {
+	configured = map[string]bool{}
+	if !declared {
+		if len(discovered) == 0 {
+			return fileHosts, configured
+		}
+		return discovered, configured
+	}
+	pending := map[string]config.HostConfig{}
+	for _, h := range fileHosts {
+		pending[h.Name] = h
+		configured[h.Name] = true
+	}
+	for _, h := range discovered {
+		if f, ok := pending[h.Name]; ok {
+			h = f
+			delete(pending, h.Name)
+		}
+		hosts = append(hosts, h)
+	}
+	for _, h := range fileHosts {
+		if _, ok := pending[h.Name]; ok {
+			hosts = append(hosts, h)
+			delete(pending, h.Name)
+		}
+	}
+	return hosts, configured
+}
+
 // discoveredConfigHosts converts gh's own authenticated-host list into the
 // []config.HostConfig shape the rest of the composition root already works with,
 // applying the same DefaultTarget-fallback rule config.Load's own
