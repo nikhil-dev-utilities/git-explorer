@@ -46,27 +46,27 @@ func TestResolveCredential(t *testing.T) {
 
 	t.Run("environment wins over the store", func(t *testing.T) {
 		got, err := resolveCredential(ctx, env(map[string]string{"BITBUCKET_EMAIL": "env@example.com", "BITBUCKET_API_TOKEN": secret}),
-			fillMustNotRun(t), "api.bitbucket.org")
+			fillMustNotRun(t), "api.bitbucket.org", false)
 		if err != nil || got.username != "env@example.com" || got.password != secret {
 			t.Errorf("got %+v, %v", got.username, err)
 		}
 	})
 	t.Run("only one environment variable is an error", func(t *testing.T) {
-		_, err := resolveCredential(ctx, env(map[string]string{"BITBUCKET_API_TOKEN": secret}), fillMustNotRun(t), "api.bitbucket.org")
+		_, err := resolveCredential(ctx, env(map[string]string{"BITBUCKET_API_TOKEN": secret}), fillMustNotRun(t), "api.bitbucket.org", false)
 		wantFatalWithoutSecret(t, err)
 	})
 	t.Run("store hit", func(t *testing.T) {
-		got, err := resolveCredential(ctx, env(nil), fillReturning(stored, true, nil), "api.bitbucket.org")
+		got, err := resolveCredential(ctx, env(nil), fillReturning(stored, true, nil), "api.bitbucket.org", false)
 		if err != nil || got != stored {
 			t.Errorf("got %v, %v; want the stored credential", got.username, err)
 		}
 	})
 	t.Run("store miss is Fatal", func(t *testing.T) {
-		_, err := resolveCredential(ctx, env(nil), fillReturning(credential{}, false, nil), "api.bitbucket.org")
+		_, err := resolveCredential(ctx, env(nil), fillReturning(credential{}, false, nil), "api.bitbucket.org", false)
 		wantFatalWithoutSecret(t, err)
 	})
 	t.Run("store failure is Fatal", func(t *testing.T) {
-		_, err := resolveCredential(ctx, env(nil), fillReturning(credential{}, false, context.DeadlineExceeded), "api.bitbucket.org")
+		_, err := resolveCredential(ctx, env(nil), fillReturning(credential{}, false, context.DeadlineExceeded), "api.bitbucket.org", false)
 		wantFatalWithoutSecret(t, err)
 	})
 }
@@ -110,4 +110,23 @@ func TestGitCredentialFill_MissingEntryFailsFastWithoutPrompting(t *testing.T) {
 	if ok || err != nil {
 		t.Errorf("gitCredentialFill = ok %v, err %v; want a plain miss", ok, err)
 	}
+}
+
+func TestResolveCredential_DataCenter(t *testing.T) {
+	ctx := context.Background()
+	t.Run("Cloud variables are ignored, and a store miss is Fatal", func(t *testing.T) {
+		_, err := resolveCredential(ctx, env(map[string]string{"BITBUCKET_EMAIL": "e", "BITBUCKET_API_TOKEN": secret}),
+			fillReturning(credential{}, false, nil), "bitbucket.corp.internal", true)
+		wantFatalWithoutSecret(t, err)
+		if !strings.Contains(err.Error(), "BITBUCKET_TOKEN") {
+			t.Errorf("error %q does not name BITBUCKET_TOKEN", err)
+		}
+	})
+	t.Run("store hit", func(t *testing.T) {
+		stored := credential{username: "me", password: secret}
+		got, err := resolveCredential(ctx, env(nil), fillReturning(stored, true, nil), "bitbucket.corp.internal", true)
+		if err != nil || got != stored {
+			t.Errorf("got %v, %v", got.username, err)
+		}
+	})
 }
