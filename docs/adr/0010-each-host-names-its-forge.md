@@ -1,5 +1,7 @@
 # Each Host names its Forge, and one router Forge serves the UI
 
+> Data Center support was added later, see [ADR-0012](./0012-bitbucket-data-center-is-inferred-from-the-host-name.md).
+
 Until now one `forge.Forge` (the GitHub adapter) served every Host, so "multiple Hosts" meant
 "multiple GitHub installs". Bitbucket is the first second Forge. Each Host in the config now
 names its Forge (`forge: github | bitbucket`, default `github`), and `forge.Host` carries it.

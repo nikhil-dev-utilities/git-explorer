@@ -29,7 +29,7 @@ _Avoid_: server, instance, endpoint, remote
 **Org**:
 A namespace on a Host that owns Repos. A user's own personal namespace is modelled as an
 Org so the navigation has one uniform shape. On Bitbucket Cloud the Org is the Workspace (its
-Projects are not modelled); on Bitbucket Data Center it would be the Project.
+Projects are not modelled); on Bitbucket Data Center it is the Project.
 _Avoid_: organization, owner, group, account, namespace
 
 **Repo**:

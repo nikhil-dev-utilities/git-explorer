@@ -40,6 +40,9 @@ const starterConfigContent = `# git-explorer config.
 #   - name: bitbucket.org        # Bitbucket Cloud; credentials never go in this file
 #     forge: bitbucket           # github (default) | bitbucket
 #     protocol: https
+#   - name: bitbucket.corp.internal  # any other Bitbucket name is Data Center
+#     forge: bitbucket
+#     protocol: ssh
 
 # See DESIGN.md's Config section (or the README) for the full write-up.
 `
