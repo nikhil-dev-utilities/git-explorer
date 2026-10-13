@@ -1,6 +1,6 @@
 # 010 - Bitbucket Data Center / Server support (#110)
 
-- status: in_progress (PR open, awaiting review)
+- status: completed
 - last updated: 2026-10-12
 
 ## Request
@@ -20,7 +20,7 @@ No new config key.
 3. [x] DC credentials: `BITBUCKET_TOKEN` (Bearer) from env, else `git credential fill` for the host.
 4. [x] Tests with httptest.
 5. [x] Docs: README, DESIGN.md, bootstrap config comment.
-6. [ ] PR. Not verified against a real DC instance (none available).
+6. [x] PR #120 merged (not released, per user). Not verified against a real DC instance (none available).
 
 ## Notes
 - Commits: adapter + tests, then ADR-0012 + docs. Branch `feat/bitbucket-data-center`.
